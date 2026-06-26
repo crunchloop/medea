@@ -20,6 +20,7 @@ import (
 	"github.com/bilby91/medea/internal/auth"
 	"github.com/bilby91/medea/internal/creds"
 	"github.com/bilby91/medea/internal/refresh"
+	"github.com/bilby91/medea/internal/rollout"
 	"github.com/bilby91/medea/internal/server"
 	"github.com/bilby91/medea/internal/store"
 	"github.com/bilby91/medea/internal/tlsgen"
@@ -34,6 +35,9 @@ var (
 	serveKey         string
 	serveCredsDir    string
 	serveRefreshIntv time.Duration
+	serveRollouts    bool
+	serveSnapshotDir string
+	serveRolloutIntv time.Duration
 )
 
 func init() {
@@ -52,6 +56,9 @@ func init() {
 	f.StringVar(&serveKey, "tls-key", "medea-key.pem", "TLS key path (generated if missing)")
 	f.StringVar(&serveCredsDir, "creds-dir", "medea-creds", "directory holding cluster credentials")
 	f.DurationVar(&serveRefreshIntv, "refresh-interval", 30*time.Second, "how often to refresh observed state from clusters")
+	f.BoolVar(&serveRollouts, "rollouts", false, "enable the rollout executor (global gate; default off). Per-cluster rollouts-enabled still required.")
+	f.StringVar(&serveSnapshotDir, "snapshot-dir", "medea-snapshots", "directory for pre-control-plane etcd snapshots")
+	f.DurationVar(&serveRolloutIntv, "rollout-interval", 15*time.Second, "how often the rollout executor checks for jobs")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -104,6 +111,15 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("creds: %w", err)
 	}
 	go refresh.New(st, refresh.CredsFactory(cs), serveRefreshIntv).Run(ctx)
+
+	// Rollout executor: global gate, default off. Even when on, per-cluster
+	// rollouts-enabled is still required (rollout-safety.md §3).
+	if serveRollouts {
+		go rollout.NewExecutor(st, rollout.CredsFactory(cs), serveSnapshotDir, serveRolloutIntv).Run(ctx)
+		fmt.Fprintln(os.Stderr, "medea: rollout executor ENABLED (per-cluster rollouts-enabled still required)")
+	} else {
+		fmt.Fprintln(os.Stderr, "medea: rollout executor disabled (pass --rollouts to enable)")
+	}
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(lis) }()

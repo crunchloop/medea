@@ -30,8 +30,51 @@ func init() {
 	status.Flags().StringVar(&rolloutCluster, "cluster", "", "cluster name (required)")
 	status.Flags().StringVar(&rolloutPool, "pool", "", "node pool")
 	status.Flags().BoolVarP(&rolloutWatch, "watch", "w", false, "watch for changes")
-	rolloutCmd.AddCommand(status)
+
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List rollout jobs for a cluster",
+		Args:  cobra.NoArgs,
+		RunE:  runRolloutList,
+	}
+	list.Flags().StringVar(&rolloutCluster, "cluster", "", "cluster name (required)")
+
+	rolloutCmd.AddCommand(status, list)
 	rootCmd.AddCommand(rolloutCmd)
+}
+
+func runRolloutList(_ *cobra.Command, _ []string) error {
+	if rolloutCluster == "" {
+		return errClusterRequired
+	}
+	c, closeFn, err := dial()
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	resp, err := c.ListRollouts(ctx, &pb.ListRolloutsRequest{Cluster: rolloutCluster})
+	if err != nil {
+		return err
+	}
+	tw := newTab()
+	fmt.Fprintln(tw, "POOL\tKIND\tTARGET\tSTATE\tBY\tCREATED")
+	for _, r := range resp.GetRollouts() {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			dash(r.GetPool()), rolloutKindStr(r.GetKind()), dash(r.GetTargetVersion()),
+			rolloutJobStateStr(r.GetState()), dash(r.GetCreatedBy()), dash(r.GetCreatedAt()))
+	}
+	return tw.Flush()
+}
+
+func rolloutKindStr(k pb.RolloutKind) string {
+	return dash(strings.ToLower(strings.TrimPrefix(k.String(), "ROLLOUT_KIND_")))
+}
+
+func rolloutJobStateStr(s pb.RolloutJobState) string {
+	return dash(strings.ToLower(strings.TrimPrefix(s.String(), "ROLLOUT_JOB_STATE_")))
 }
 
 func runRolloutStatus(_ *cobra.Command, _ []string) error {
