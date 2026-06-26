@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,26 +46,31 @@ func Start(t *testing.T) *Cluster {
 	talosCfg := filepath.Join(dir, "talosconfig")
 	kubeCfg := filepath.Join(dir, "kubeconfig")
 
-	// Destroy first in case a previous run leaked, then create.
-	_ = runQuiet(10*time.Minute, "talosctl", "cluster", "destroy", "--provisioner", "docker", "--name", name)
-	run(t, 12*time.Minute, "talosctl", "cluster", "create",
-		"--provisioner", "docker",
+	// Destroy first in case a previous run leaked, then create. talosctl v1.13
+	// uses the `cluster create docker` subcommand (the old --provisioner flag is
+	// gone); the docker provisioner is always 1 control plane and waits for the
+	// cluster to be healthy before returning (no --wait flag).
+	_ = runQuiet(10*time.Minute, "talosctl", "cluster", "destroy", "--name", name)
+	run(t, 12*time.Minute, "talosctl", "cluster", "create", "docker",
 		"--name", name,
-		"--controlplanes", "1",
 		"--workers", "1",
-		"--talosconfig", talosCfg,
-		"--wait",
+		"--talosconfig-destination", talosCfg,
 	)
 	t.Cleanup(func() {
-		_ = runQuiet(5*time.Minute, "talosctl", "cluster", "destroy", "--provisioner", "docker", "--name", name)
+		_ = runQuiet(5*time.Minute, "talosctl", "cluster", "destroy", "--name", name)
 	})
-
-	run(t, 2*time.Minute, "talosctl", "--talosconfig", talosCfg, "kubeconfig", "--force", kubeCfg)
 
 	tb, err := os.ReadFile(talosCfg)
 	if err != nil {
 		t.Fatalf("read talosconfig: %v", err)
 	}
+	// `talosctl kubeconfig` needs an explicit node — and it wants the node's
+	// cluster IP (e.g. 10.5.0.2), not the talosconfig endpoint, which on macOS
+	// Docker Desktop is a host-mapped 127.0.0.1:<port>. Get the control-plane
+	// container's network IP from docker.
+	cpNode := controlPlaneNodeIP(t, name)
+	run(t, 2*time.Minute, "talosctl", "--talosconfig", talosCfg, "kubeconfig", "--force", "--nodes", cpNode, kubeCfg)
+
 	kb, err := os.ReadFile(kubeCfg)
 	if err != nil {
 		t.Fatalf("read kubeconfig: %v", err)
@@ -76,6 +82,23 @@ func Start(t *testing.T) *Cluster {
 		Talosconfig:     tb,
 		Kubeconfig:      kb,
 	}
+}
+
+// controlPlaneNodeIP returns the control-plane container's IP on the Talos
+// docker network (the node identity talosctl/Talos use for --nodes routing).
+func controlPlaneNodeIP(t *testing.T, clusterName string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "inspect", "-f",
+		"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+		clusterName+"-controlplane-1").Output()
+	if err != nil {
+		t.Fatalf("docker inspect control-plane container: %v", err)
+	}
+	ip := strings.TrimSpace(string(out))
+	if ip == "" {
+		t.Fatal("control-plane container has no network IP")
+	}
+	return ip
 }
 
 func requireBin(t *testing.T, name string) {
