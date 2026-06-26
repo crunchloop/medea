@@ -24,7 +24,12 @@ echo ">> destroying any prior cluster (sudo)"
 sudo talosctl cluster destroy --name "$NAME" 2>/dev/null || true
 
 echo ">> creating QEMU cluster (sudo; downloads images + boots VMs, a few minutes)"
+# disk-image preset: boot a pre-installed Talos disk (A/B partitions present, no
+# install-then-reboot during bootstrap) — converges faster and is the right shape
+# for testing an A/B OS upgrade. (The default 'iso' preset installs first and can
+# time out bootstrap on macOS/QEMU.)
 sudo talosctl cluster create qemu --name "$NAME" --workers 1 \
+  --presets disk-image \
   --talosconfig-destination "$DIR/talosconfig"
 
 # Files written by root under sudo -> make them readable by us.
