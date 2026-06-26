@@ -17,7 +17,9 @@ const defaultInstaller = "ghcr.io/siderolabs/installer"
 // (e.g. a docker/container node), letting the caller fall back to the default.
 func (t *Client) InstallImage(ctx context.Context, node string) (string, error) {
 	md := resource.NewMetadata(configres.NamespaceName, configres.MachineConfigType, configres.ActiveID, resource.VersionUndefined)
-	res, err := t.c.COSI.Get(talosclient.WithNodes(ctx, node), md)
+	// COSI Get is strictly one-to-one — use WithNode (singular), not WithNodes
+	// (plural fan-out), or apid rejects it with "one-2-many proxying not supported".
+	res, err := t.c.COSI.Get(talosclient.WithNode(ctx, node), md)
 	if err != nil {
 		return "", err
 	}
