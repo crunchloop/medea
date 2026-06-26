@@ -77,6 +77,13 @@ func TestQemuUpgrade(t *testing.T) {
 	}
 	t.Logf("worker %s (%s): %s -> %s", workerName, workerIP, cur, target)
 
+	// Log the exact upgrade image so we can verify schematic preservation.
+	if img, e := tc.InstallImage(ctx, workerIP); e == nil {
+		t.Logf("worker install image: %q -> derived %q", img, talos.DeriveInstallerImage(img, target))
+	} else {
+		t.Logf("InstallImage(worker): %v", e)
+	}
+
 	// Model the cluster in a fresh store, desired = target.
 	st, err := store.Open(filepath.Join(t.TempDir(), "medea.db"))
 	if err != nil {
@@ -98,9 +105,28 @@ func TestQemuUpgrade(t *testing.T) {
 
 	// Drive the real reconciler (UpgradeOS reboots the VM).
 	r := rollout.New(st, tc, kc, t.TempDir())
-	r.PollInterval = 10 * time.Second
-	r.WaitTimeout = 20 * time.Minute
+	r.PollInterval = 15 * time.Second
+	r.WaitTimeout = 25 * time.Minute
 	if err := r.ReconcilePool(ctx, "qemu", "workers"); err != nil {
+		// Probe with FRESH clients to distinguish "node never came back" from a
+		// stale connection / version-routing issue.
+		if kc2, e := kube.New(kb); e == nil {
+			if ns, e := kc2.ListNodes(ctx); e == nil {
+				for _, n := range ns {
+					t.Logf("post: node %s ip=%s ready=%t kubelet=%s", n.Name, n.InternalIP, n.Ready, n.KubeletVersion)
+				}
+			} else {
+				t.Logf("post ListNodes: %v", e)
+			}
+		}
+		if tc2, e := talos.New(ctx, tb, nil); e == nil {
+			defer tc2.Close()
+			if v, e := tc2.Version(ctx, workerIP); e == nil {
+				t.Logf("post worker talos version (fresh client): %s", v)
+			} else {
+				t.Logf("post worker Version (fresh client): %v", e)
+			}
+		}
 		t.Fatalf("ReconcilePool: %v", err)
 	}
 

@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -183,11 +184,13 @@ func (r *Reconciler) waitHealthy(ctx context.Context, addr, name, target string)
 	wctx, cancel := context.WithTimeout(ctx, r.WaitTimeout)
 	defer cancel()
 	for {
-		ready, _ := r.kube.NodeReady(wctx, name)
-		v, _ := r.talos.Version(wctx, addr)
+		ready, kerr := r.kube.NodeReady(wctx, name)
+		v, verr := r.talos.Version(wctx, addr)
 		if ready && v == target {
 			return nil
 		}
+		log.Printf("rollout: waiting %s -> %s (ready=%t version=%q kubeErr=%v talosErr=%v)",
+			addr, target, ready, v, kerr, verr)
 		select {
 		case <-wctx.Done():
 			return fmt.Errorf("timed out waiting for %s to reach %s (ready=%t, version=%q)", addr, target, ready, v)
