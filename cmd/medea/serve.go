@@ -10,24 +10,30 @@ import (
 	"strings"
 	"syscall"
 
+	"time"
+
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	pb "github.com/bilby91/medea/gen/medea/v1"
 	"github.com/bilby91/medea/internal/auth"
+	"github.com/bilby91/medea/internal/creds"
+	"github.com/bilby91/medea/internal/refresh"
 	"github.com/bilby91/medea/internal/server"
 	"github.com/bilby91/medea/internal/store"
 	"github.com/bilby91/medea/internal/tlsgen"
 )
 
 var (
-	serveListen    string
-	serveStore     string
-	serveToken     string
-	serveTokenFile string
-	serveCert      string
-	serveKey       string
+	serveListen      string
+	serveStore       string
+	serveToken       string
+	serveTokenFile   string
+	serveCert        string
+	serveKey         string
+	serveCredsDir    string
+	serveRefreshIntv time.Duration
 )
 
 func init() {
@@ -44,6 +50,8 @@ func init() {
 	f.StringVar(&serveTokenFile, "token-file", "", "file containing the bearer token")
 	f.StringVar(&serveCert, "tls-cert", "medea-cert.pem", "TLS cert path (generated if missing)")
 	f.StringVar(&serveKey, "tls-key", "medea-key.pem", "TLS key path (generated if missing)")
+	f.StringVar(&serveCredsDir, "creds-dir", "medea-creds", "directory holding cluster credentials")
+	f.DurationVar(&serveRefreshIntv, "refresh-interval", 30*time.Second, "how often to refresh observed state from clusters")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -64,7 +72,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	if err := tlsgen.EnsureServerCert(serveCert, serveKey, hosts); err != nil {
 		return fmt.Errorf("tls cert: %w", err)
 	}
-	creds, err := credentials.NewServerTLSFromFile(serveCert, serveKey)
+	tlsCreds, err := credentials.NewServerTLSFromFile(serveCert, serveKey)
 	if err != nil {
 		return fmt.Errorf("load tls: %w", err)
 	}
@@ -76,7 +84,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	defer st.Close()
 
 	srv := grpc.NewServer(
-		grpc.Creds(creds),
+		grpc.Creds(tlsCreds),
 		grpc.UnaryInterceptor(auth.UnaryInterceptor(token)),
 		grpc.StreamInterceptor(auth.StreamInterceptor(token)),
 	)
@@ -89,6 +97,13 @@ func runServe(_ *cobra.Command, _ []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Refresh loop: rebuild observed state from the clusters (datastore.md §7).
+	cs, err := creds.NewFileStore(serveCredsDir)
+	if err != nil {
+		return fmt.Errorf("creds: %w", err)
+	}
+	go refresh.New(st, refresh.CredsFactory(cs), serveRefreshIntv).Run(ctx)
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(lis) }()
