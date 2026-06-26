@@ -26,6 +26,9 @@ test: ## run unit tests with the race detector (fast; no external deps)
 test-integration: ## run integration tests against a scratch Talos cluster (needs docker + talosctl; slow)
 	go test -tags integration -timeout 25m ./...
 
+test-qemu: ## faithful UpgradeOS rollout on a real QEMU cluster (Apple Silicon + qemu; uses sudo for vmnet)
+	./scripts/qemu-validate.sh
+
 vet:
 	go vet ./...
 
