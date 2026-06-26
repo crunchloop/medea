@@ -1,0 +1,136 @@
+syntax = "proto3";
+
+// Package medea.v1 is the single source of type truth for Medea: the API
+// speaks these messages, the bbolt store persists them verbatim (proto wire
+// bytes), and the CLI consumes them. See design/datastore.md §4.
+package medea.v1;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/bilby91/medea/gen/medea/v1;medeav1";
+
+// Role of a node / node pool.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_CONTROLPLANE = 1;
+  ROLE_WORKER = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Cluster — cluster-wide desired + observed state. One per managed cluster.
+// ---------------------------------------------------------------------------
+message Cluster {
+  string name = 1;
+  ClusterDesired desired = 2;    // precious; persisted
+  ClusterObserved observed = 3;  // cache; in-memory only (datastore.md §2)
+  ClusterEndpoints endpoints = 4;
+  uint64 revision = 5;           // last-write revision (datastore.md §4)
+}
+
+message ClusterDesired {
+  string talos_version = 1;
+  string kubernetes_version = 2;
+}
+
+message ClusterObserved {
+  string kubernetes_version = 1;
+  bool control_plane_ready = 2;
+}
+
+message ClusterEndpoints {
+  repeated string talos = 1;  // Talos API endpoints (node IPs)
+  string kube = 2;            // kube-apiserver endpoint host:port
+}
+
+// ---------------------------------------------------------------------------
+// NodePool — a group of like nodes (the managed-node-group abstraction).
+// ---------------------------------------------------------------------------
+message NodePool {
+  string cluster = 1;
+  string name = 2;
+  Role role = 3;
+  repeated string members = 4;       // node identities (addresses); v1 = existing nodes
+  NodePoolDesired desired = 5;       // precious; persisted
+  RolloutStrategy strategy = 6;
+  bool paused = 7;
+  uint64 revision = 8;
+}
+
+message NodePoolDesired {
+  string talos_version = 1;  // "" = inherit Cluster.desired.talos_version
+}
+
+message RolloutStrategy {
+  uint32 max_unavailable = 1;                    // OS path; default 1
+  google.protobuf.Duration drain_timeout = 2;
+  bool halt_on_failure = 3;
+  bool snapshot_before_control_plane = 4;        // mandatory default for controlplane
+}
+
+// ---------------------------------------------------------------------------
+// Machine — one physical/virtual node.
+// ---------------------------------------------------------------------------
+message Machine {
+  string cluster = 1;
+  string pool = 2;
+  string talos_endpoint = 3;     // identity within a cluster
+  Role role = 4;
+  MachineObserved observed = 5;  // cache; in-memory only
+  uint64 revision = 6;
+}
+
+message MachineObserved {
+  MachinePhase phase = 1;
+  string talos_version = 2;
+  string kubernetes_version = 3;
+  bool healthy = 4;
+}
+
+enum MachinePhase {
+  MACHINE_PHASE_UNSPECIFIED = 0;
+  MACHINE_PHASE_PROVISIONING = 1;
+  MACHINE_PHASE_BOOTING = 2;
+  MACHINE_PHASE_JOINING = 3;
+  MACHINE_PHASE_READY = 4;
+  MACHINE_PHASE_DRAINING = 5;
+  MACHINE_PHASE_RESETTING = 6;
+  MACHINE_PHASE_NOT_READY = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Rollout progress — precious *during* a rollout; persisted for resume
+// (datastore.md §2, §7; rollout-controller.md §4, §5).
+// ---------------------------------------------------------------------------
+message MachineRollout {
+  string cluster = 1;
+  string addr = 2;
+  RolloutState state = 3;
+  string target_talos_version = 4;
+  string message = 5;
+  uint64 revision = 6;
+}
+
+enum RolloutState {
+  ROLLOUT_STATE_UNSPECIFIED = 0;
+  ROLLOUT_STATE_IDLE = 1;
+  ROLLOUT_STATE_DRAINING = 2;
+  ROLLOUT_STATE_UPGRADING = 3;
+  ROLLOUT_STATE_WAITING_HEALTHY = 4;
+  ROLLOUT_STATE_DONE = 5;
+  ROLLOUT_STATE_FAILED = 6;
+}
+
+message ClusterRollout {
+  string cluster = 1;
+  ClusterRolloutPhase phase = 2;
+  string target_kubernetes_version = 3;
+  string message = 4;
+  uint64 revision = 5;
+}
+
+enum ClusterRolloutPhase {
+  CLUSTER_ROLLOUT_PHASE_UNSPECIFIED = 0;
+  CLUSTER_ROLLOUT_PHASE_IDLE = 1;
+  CLUSTER_ROLLOUT_PHASE_UPGRADING = 2;
+  CLUSTER_ROLLOUT_PHASE_FAILED = 3;
+}

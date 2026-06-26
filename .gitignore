@@ -1,0 +1,10 @@
+# build output
+/bin/
+/medea
+
+# runtime state (never commit the live store or its desired-state export)
+*.db
+medea-desired.json
+
+# design notes (in-flight); also covered by repo-root .gitignore
+design/private/

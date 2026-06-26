@@ -1,0 +1,16 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  # Deliberate departures from Google-API style for a small, typed control-plane
+  # API (design/api-and-auth.md §1): RPCs return domain types directly
+  # (GetCluster -> Cluster) and share response types where the shape is identical.
+  except:
+    - SERVICE_SUFFIX             # service is `Medea`, not `MedeaService`
+    - RPC_RESPONSE_STANDARD_NAME # GetCluster returns Cluster; Watch streams WatchEvent
+    - RPC_REQUEST_RESPONSE_UNIQUE # SetVersionsResponse / RolloutControlResponse are shared
+breaking:
+  use:
+    - FILE

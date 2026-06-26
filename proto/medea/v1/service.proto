@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+// The Medea gRPC service. Clients (CLI, future UI) reach the control plane
+// through this surface; it is never consumed from inside a managed cluster.
+// See design/api-and-auth.md.
+package medea.v1;
+
+import "medea/v1/medea.proto";
+
+option go_package = "github.com/bilby91/medea/gen/medea/v1;medeav1";
+
+service Medea {
+  // --- reads ---
+  rpc GetCluster(GetClusterRequest) returns (Cluster);
+  rpc ListClusters(ListClustersRequest) returns (ListClustersResponse);
+  rpc ListNodePools(ListNodePoolsRequest) returns (ListNodePoolsResponse);
+  rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse);
+  rpc GetRollout(GetRolloutRequest) returns (GetRolloutResponse);
+
+  // --- desired-state mutations (intent verbs; server-side read-modify-write) ---
+  rpc SetClusterVersions(SetClusterVersionsRequest) returns (SetVersionsResponse);
+  rpc SetNodePoolVersion(SetNodePoolVersionRequest) returns (SetVersionsResponse);
+  rpc PauseRollout(PauseRolloutRequest) returns (RolloutControlResponse);
+  rpc ResumeRollout(ResumeRolloutRequest) returns (RolloutControlResponse);
+
+  // --- watch ---
+  rpc Watch(WatchRequest) returns (stream WatchEvent);
+}
+
+message GetClusterRequest {
+  string cluster = 1;
+}
+
+message ListClustersRequest {}
+
+message ListClustersResponse {
+  repeated Cluster clusters = 1;
+}
+
+message ListNodePoolsRequest {
+  string cluster = 1;
+}
+
+message ListNodePoolsResponse {
+  repeated NodePool node_pools = 1;
+}
+
+message ListMachinesRequest {
+  string cluster = 1;
+  string pool = 2; // optional filter
+}
+
+message ListMachinesResponse {
+  repeated Machine machines = 1;
+}
+
+message GetRolloutRequest {
+  string cluster = 1;
+  string pool = 2; // optional; "" = all machines in cluster
+}
+
+message GetRolloutResponse {
+  ClusterRollout cluster_rollout = 1;
+  repeated MachineRollout machine_rollouts = 2;
+}
+
+message SetClusterVersionsRequest {
+  string cluster = 1;
+  optional string talos_version = 2;      // unset = leave as-is
+  optional string kubernetes_version = 3; // unset = leave as-is
+  uint64 expected_revision = 4;           // 0 = read-modify-write; >0 = CAS
+}
+
+message SetNodePoolVersionRequest {
+  string cluster = 1;
+  string pool = 2;
+  optional string talos_version = 3; // unset = leave as-is ("" clears = inherit cluster)
+  uint64 expected_revision = 4;
+}
+
+message SetVersionsResponse {
+  uint64 revision = 1;
+}
+
+message PauseRolloutRequest {
+  string cluster = 1;
+  string pool = 2;
+}
+
+message ResumeRolloutRequest {
+  string cluster = 1;
+  string pool = 2;
+}
+
+message RolloutControlResponse {
+  uint64 revision = 1;
+}
+
+message WatchRequest {
+  uint64 since_revision = 1;
+}
+
+message WatchEvent {
+  string kind = 1;
+  string key = 2;
+  uint64 revision = 3;
+}

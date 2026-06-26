@@ -1,0 +1,245 @@
+// Package server implements the Medea gRPC service over a store.Store
+// (design/api-and-auth.md). Mutations are server-side read-modify-write with
+// optional compare-and-swap; reads return the proto domain types directly.
+package server
+
+import (
+	"context"
+	"errors"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	pb "github.com/bilby91/medea/gen/medea/v1"
+	"github.com/bilby91/medea/internal/store"
+)
+
+// Server is the gRPC service implementation.
+type Server struct {
+	pb.UnimplementedMedeaServer
+	store store.Store
+}
+
+// New returns a Server backed by st.
+func New(st store.Store) *Server { return &Server{store: st} }
+
+// mapErr converts non-domain store errors to gRPC status codes.
+func mapErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, store.ErrConflict):
+		return status.Error(codes.Aborted, "write contention")
+	default:
+		return status.Error(codes.Internal, err.Error())
+	}
+}
+
+// --- reads ---
+
+func (s *Server) GetCluster(_ context.Context, req *pb.GetClusterRequest) (*pb.Cluster, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	c, _, err := s.store.GetCluster(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if c == nil {
+		return nil, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+	}
+	return c, nil
+}
+
+func (s *Server) ListClusters(_ context.Context, _ *pb.ListClustersRequest) (*pb.ListClustersResponse, error) {
+	cs, err := s.store.ListClusters()
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.ListClustersResponse{Clusters: cs}, nil
+}
+
+func (s *Server) ListNodePools(_ context.Context, req *pb.ListNodePoolsRequest) (*pb.ListNodePoolsResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	nps, err := s.store.ListNodePools(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.ListNodePoolsResponse{NodePools: nps}, nil
+}
+
+func (s *Server) ListMachines(_ context.Context, req *pb.ListMachinesRequest) (*pb.ListMachinesResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	ms, err := s.store.ListMachines(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.ListMachinesResponse{Machines: ms}, nil
+}
+
+func (s *Server) GetRollout(_ context.Context, req *pb.GetRolloutRequest) (*pb.GetRolloutResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	cr, err := s.store.GetClusterRollout(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	ms, err := s.store.ListMachines(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	var rollouts []*pb.MachineRollout
+	for _, m := range ms {
+		mr, err := s.store.GetMachineRollout(req.GetCluster(), m.GetTalosEndpoint())
+		if err != nil {
+			return nil, mapErr(err)
+		}
+		if mr != nil {
+			rollouts = append(rollouts, mr)
+		}
+	}
+	return &pb.GetRolloutResponse{ClusterRollout: cr, MachineRollouts: rollouts}, nil
+}
+
+// --- mutations (read-modify-write + optional CAS) ---
+
+func (s *Server) SetClusterVersions(_ context.Context, req *pb.SetClusterVersionsRequest) (*pb.SetVersionsResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	rev, err := rmw(func() (store.Revision, error) {
+		c, rev, err := s.store.GetCluster(req.GetCluster())
+		if err != nil {
+			return 0, err
+		}
+		if c == nil {
+			return 0, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+		}
+		if req.GetExpectedRevision() != 0 && uint64(rev) != req.GetExpectedRevision() {
+			return 0, status.Errorf(codes.FailedPrecondition, "revision mismatch: have %d, want %d", rev, req.GetExpectedRevision())
+		}
+		if c.Desired == nil {
+			c.Desired = &pb.ClusterDesired{}
+		}
+		if req.TalosVersion != nil {
+			c.Desired.TalosVersion = req.GetTalosVersion()
+		}
+		if req.KubernetesVersion != nil {
+			c.Desired.KubernetesVersion = req.GetKubernetesVersion()
+		}
+		return s.store.PutClusterDesired(c, rev)
+	}, req.GetExpectedRevision())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SetVersionsResponse{Revision: uint64(rev)}, nil
+}
+
+func (s *Server) SetNodePoolVersion(_ context.Context, req *pb.SetNodePoolVersionRequest) (*pb.SetVersionsResponse, error) {
+	if req.GetCluster() == "" || req.GetPool() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster and pool required")
+	}
+	rev, err := rmw(func() (store.Revision, error) {
+		np, rev, err := s.store.GetNodePool(req.GetCluster(), req.GetPool())
+		if err != nil {
+			return 0, err
+		}
+		if np == nil {
+			return 0, status.Errorf(codes.NotFound, "nodepool %q/%q not found", req.GetCluster(), req.GetPool())
+		}
+		if req.GetExpectedRevision() != 0 && uint64(rev) != req.GetExpectedRevision() {
+			return 0, status.Errorf(codes.FailedPrecondition, "revision mismatch: have %d, want %d", rev, req.GetExpectedRevision())
+		}
+		if np.Desired == nil {
+			np.Desired = &pb.NodePoolDesired{}
+		}
+		if req.TalosVersion != nil {
+			np.Desired.TalosVersion = req.GetTalosVersion()
+		}
+		return s.store.PutNodePoolDesired(np, rev)
+	}, req.GetExpectedRevision())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SetVersionsResponse{Revision: uint64(rev)}, nil
+}
+
+func (s *Server) PauseRollout(_ context.Context, req *pb.PauseRolloutRequest) (*pb.RolloutControlResponse, error) {
+	rev, err := s.setPaused(req.GetCluster(), req.GetPool(), true)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RolloutControlResponse{Revision: uint64(rev)}, nil
+}
+
+func (s *Server) ResumeRollout(_ context.Context, req *pb.ResumeRolloutRequest) (*pb.RolloutControlResponse, error) {
+	rev, err := s.setPaused(req.GetCluster(), req.GetPool(), false)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.RolloutControlResponse{Revision: uint64(rev)}, nil
+}
+
+func (s *Server) setPaused(cluster, pool string, paused bool) (store.Revision, error) {
+	if cluster == "" || pool == "" {
+		return 0, status.Error(codes.InvalidArgument, "cluster and pool required")
+	}
+	return rmw(func() (store.Revision, error) {
+		np, rev, err := s.store.GetNodePool(cluster, pool)
+		if err != nil {
+			return 0, err
+		}
+		if np == nil {
+			return 0, status.Errorf(codes.NotFound, "nodepool %q/%q not found", cluster, pool)
+		}
+		np.Paused = paused
+		return s.store.PutNodePoolDesired(np, rev)
+	}, 0)
+}
+
+// rmw runs a read-modify-write body. With no CAS pin (expected==0) it retries
+// once on a lost race (store.ErrConflict); with a pin it surfaces the conflict
+// as Aborted. Status errors from the body pass through unchanged.
+func rmw(body func() (store.Revision, error), expected uint64) (store.Revision, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		rev, err := body()
+		if err == nil {
+			return rev, nil
+		}
+		if errors.Is(err, store.ErrConflict) {
+			if expected != 0 {
+				return 0, status.Error(codes.Aborted, "lost race against concurrent write")
+			}
+			continue // retry the read-modify-write once
+		}
+		if _, ok := status.FromError(err); ok {
+			return 0, err // already a status error (NotFound/FailedPrecondition/...)
+		}
+		return 0, mapErr(err)
+	}
+	return 0, status.Error(codes.Aborted, "write contention")
+}
+
+// --- watch ---
+
+func (s *Server) Watch(req *pb.WatchRequest, stream pb.Medea_WatchServer) error {
+	ch, err := s.store.Watch(stream.Context(), store.Revision(req.GetSinceRevision()))
+	if err != nil {
+		return mapErr(err)
+	}
+	for ev := range ch {
+		if err := stream.Send(&pb.WatchEvent{
+			Kind:     string(ev.Kind),
+			Key:      ev.Key,
+			Revision: uint64(ev.Revision),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
