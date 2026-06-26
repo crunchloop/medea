@@ -6,7 +6,7 @@
 GOBIN := $(shell go env GOPATH)/bin
 export PATH := $(GOBIN):$(PATH)
 
-.PHONY: tools generate build test vet lint check
+.PHONY: tools generate build test test-integration vet lint check
 
 tools: ## install codegen tools into GOPATH/bin
 	go install github.com/bufbuild/buf/cmd/buf@latest
@@ -20,8 +20,11 @@ generate: ## regenerate Go types from proto/
 build: ## build all packages
 	go build ./...
 
-test: ## run tests with the race detector
+test: ## run unit tests with the race detector (fast; no external deps)
 	go test -race ./...
+
+test-integration: ## run integration tests against a scratch Talos cluster (needs docker + talosctl; slow)
+	go test -tags integration -timeout 25m ./...
 
 vet:
 	go vet ./...
