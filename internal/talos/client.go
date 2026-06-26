@@ -8,7 +8,9 @@ package talos
 import (
 	"context"
 	"fmt"
+	"io"
 
+	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	talosclient "github.com/siderolabs/talos/pkg/machinery/client"
 	talosconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 )
@@ -51,4 +53,32 @@ func (t *Client) Version(ctx context.Context, node string) (string, error) {
 		return "", fmt.Errorf("talos: empty version response from %s", node)
 	}
 	return msgs[0].GetVersion().GetTag(), nil
+}
+
+// UpgradeOS triggers an atomic A/B OS upgrade of node to the given installer
+// image; the node reboots into the new image. The image MUST include the node's
+// system extensions / Image Factory schematic — the caller derives it
+// (talos-client.md §3); a bare installer image silently drops extensions.
+//
+// DESTRUCTIVE: reboots the node. Only ever invoked by the rollout reconciler
+// after drain + (for control-plane) an etcd snapshot.
+func (t *Client) UpgradeOS(ctx context.Context, node, image string) error {
+	_, err := t.c.UpgradeWithOptions(talosclient.WithNodes(ctx, node),
+		talosclient.WithUpgradeImage(image),
+		talosclient.WithUpgradeRebootMode(machineapi.UpgradeRequest_DEFAULT),
+	)
+	return err
+}
+
+// EtcdSnapshot streams an etcd snapshot from a control-plane node into w. Used by
+// the rollout's snapshot-before-control-plane gate (rollout-controller.md §3) and,
+// later, the backup feature. Non-destructive (a read-only copy of etcd).
+func (t *Client) EtcdSnapshot(ctx context.Context, node string, w io.Writer) error {
+	rc, err := t.c.EtcdSnapshot(talosclient.WithNodes(ctx, node), &machineapi.EtcdSnapshotRequest{})
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	_, err = io.Copy(w, rc)
+	return err
 }

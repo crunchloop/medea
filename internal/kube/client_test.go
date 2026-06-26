@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +65,72 @@ func TestNodeReadyAndKubeletVersion(t *testing.T) {
 	v, err := c.KubeletVersion(context.Background(), "w1")
 	if err != nil || v != "v1.36.1" {
 		t.Fatalf("KubeletVersion = %q, %v", v, err)
+	}
+}
+
+func TestIsEvictable(t *testing.T) {
+	mkPod := func(mut func(*corev1.Pod)) *corev1.Pod {
+		p := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+			Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+		if mut != nil {
+			mut(p)
+		}
+		return p
+	}
+	cases := []struct {
+		name string
+		pod  *corev1.Pod
+		want bool
+	}{
+		{"running app pod", mkPod(nil), true},
+		{"daemonset pod", mkPod(func(p *corev1.Pod) {
+			p.OwnerReferences = []metav1.OwnerReference{{Kind: "DaemonSet", Name: "ds"}}
+		}), false},
+		{"mirror pod", mkPod(func(p *corev1.Pod) {
+			p.Annotations = map[string]string{corev1.MirrorPodAnnotationKey: "x"}
+		}), false},
+		{"succeeded", mkPod(func(p *corev1.Pod) { p.Status.Phase = corev1.PodSucceeded }), false},
+		{"failed", mkPod(func(p *corev1.Pod) { p.Status.Phase = corev1.PodFailed }), false},
+		{"terminating", mkPod(func(p *corev1.Pod) {
+			now := metav1.Now()
+			p.DeletionTimestamp = &now
+		}), false},
+		{"replicaset-owned", mkPod(func(p *corev1.Pod) {
+			p.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "rs"}}
+		}), true},
+	}
+	for _, tc := range cases {
+		if got := isEvictable(tc.pod); got != tc.want {
+			t.Errorf("%s: isEvictable = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestDrainNoEvictablePods(t *testing.T) {
+	// Node hosts only a DaemonSet pod -> nothing to evict; Drain returns quickly
+	// and the node ends up cordoned. (Full eviction/PDB/timeout behavior is
+	// covered by the integration tier; the fake clientset does not delete on
+	// EvictV1, so the wait loop can't be exercised in a unit test.)
+	dsPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "ds-pod", Namespace: "kube-system",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "DaemonSet", Name: "cilium"}},
+		},
+		Spec:   corev1.PodSpec{NodeName: "w1"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	cs := fake.NewSimpleClientset(node("w1", "10.0.0.1", "v1.36.1", false, true), dsPod)
+	c := NewWithClientset(cs)
+	ctx := context.Background()
+
+	if err := c.Drain(ctx, "w1", 5*time.Second); err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "w1", metav1.GetOptions{})
+	if !n.Spec.Unschedulable {
+		t.Fatal("Drain did not cordon the node")
 	}
 }
 
