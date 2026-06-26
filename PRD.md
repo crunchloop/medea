@@ -2,7 +2,7 @@
 
 **Status:** Draft (Pass-1)
 **Author:** @bilby91
-**Date:** 2026-06-25 (initial draft); 2026-06-25 (Pass-1 — store, protocol, Talos-client, and state-model decisions resolved)
+**Date:** 2026-06-25 (initial draft); 2026-06-25 (Pass-1 — store, protocol, Talos-client, and state-model decisions resolved); 2026-06-26 (rollout-safety — explicit-job trigger, per-cluster mode + rolloutsEnabled)
 **Repo:** built in-place under `medea/` in `github.com/bilby91/talos-cluster`, which converges into Medea over time (§13 #11). Go module path: `github.com/bilby91/medea` from day one.
 **Visibility:** private
 **License:** Apache-2.0 (to be committed day 1 of the extracted repo)
@@ -306,6 +306,12 @@ Resolved during Pass-1 (2026-06-25):
 12. **Name = Medea.** In the Argonautica, Medea is the one who brought down Talos (drained his ichor) — apt for a control plane with power over Talos nodes. Binary `medea`. Considered and rejected: `forge` (overloaded/unsearchable), `ichor`, `anvil`, `warden`.
 9. **Auth = bearer token over TLS (v1).** Server presents a self-signed cert (LAN service); a shared bearer token is checked by a gRPC interceptor. Rejected plaintext+token (cleartext credential on the LAN). mTLS / OIDC / RBAC deferred behind the interceptor seam. Credentials (talosconfig/kubeconfig) live in a separate file-backed `CredentialStore`, never in bbolt, never exported (`design/api-and-auth.md`).
 11. **Repo: convergence, not extraction.** The end state is that `bilby91/talos-cluster` *becomes* Medea — its current contents are hand-run early versions of Medea's own subsystems (`netboot/` = the Layer-0 provisioning plane; `controlplane.yaml`/`worker.yaml`/`patches/`/`cilium/` = the declarative cluster definition + add-ons Medea will own; `_out/` = seed state; `scripts/` = future reconcilers). So we **do not** spin up a separate repo or `git init` the subtree; we build in-place and the whole repo restructures under Medea when it's real. Consequence: **Go module path is `github.com/bilby91/medea` from day one** (not `…/talos-cluster/medea`) to avoid an import rewrite at convergence.
+
+Resolved during rollout-safety review (2026-06-26):
+
+16. **Rollout trigger = explicit jobs; per-cluster `mode` (manual default).** Reverses the drift-reconcile stance of `rollout-controller.md §1`: editing `desired` is inert in v1; rollouts run only from a confirmed `Rollout` job. `auto` (drift-reconcile) is architected but deferred and never for control-plane (`design/rollout-safety.md`).
+17. **`rolloutsEnabled` per cluster, default off.** Never set by seed; enforced at job creation *and* execution. The hard guard that makes the live production cluster un-rollout-able by accident — it is simply never enabled.
+18. **Control-plane: no extra confirmation gate**, but snapshot-before-control-plane stays mandatory. Plan-then-`--confirm` applies to all pools.
 
 To be resolved (non-blocking — do not block M1/M2 code):
 

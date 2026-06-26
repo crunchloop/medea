@@ -15,6 +15,14 @@ not specify those — see `datastore.md` and `talos-client.md`.
 
 ## 1. Trigger and inputs
 
+> **Superseded by [`rollout-safety.md`](rollout-safety.md) (2026-06-26).** The
+> drift-reconcile trigger in this section was reversed for safety: in v1
+> (`mode: manual`) editing `desired` is **inert**; the reconciler runs only from
+> an explicit, confirmed `Rollout` job on a `rolloutsEnabled` cluster. The state
+> machine in §2 onward (drain → snapshot → upgrade → wait → uncordon,
+> halt-on-failure) is unchanged — only *what invokes it* changed. Read the rest
+> of this section as historical.
+
 The reconciler watches the store for a delta between **desired** and
 **observed** version on a `Cluster` or `NodePool`:
 

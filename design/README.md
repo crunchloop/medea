@@ -20,7 +20,8 @@ reasoning stays useful after the work ships.
 | [`datastore.md`](datastore.md) | The embedded (bbolt) store: desired-vs-observed schema, proto-as-storage, revisions, watch, concurrency, crash recovery, desired-state export. |
 | [`api-and-auth.md`](api-and-auth.md) | The gRPC service (intent verbs, thin watch), v1 auth (bearer token over TLS), and credential storage (separate from bbolt). Resolves #8/#9. |
 | [`talos-client.md`](talos-client.md) | Talos & kube clients (no shelling): small Medea interfaces over the `machinery` client (OS upgrade/snapshot/health/version) + client-go (readiness/drain); the quarantined main-module `upgrade-k8s`; installer-image/schematic derivation. |
-| [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. |
+| [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. (Trigger in §1 superseded by `rollout-safety.md`.) |
+| [`rollout-safety.md`](rollout-safety.md) | How rollouts are triggered + the guards making accidental action impossible: per-cluster `mode` (manual default), `rolloutsEnabled` (default off), plan/confirm, boot safety. Reverses rollout-controller.md §1. |
 
 Planned design records (to be written as work approaches):
 
