@@ -16,6 +16,13 @@ enum Role {
   ROLE_WORKER = 2;
 }
 
+// ClusterMode governs how rollouts are triggered (design/rollout-safety.md §2).
+enum ClusterMode {
+  CLUSTER_MODE_UNSPECIFIED = 0; // treated as MANUAL
+  CLUSTER_MODE_MANUAL = 1;      // rollouts only via explicit Rollout jobs (v1)
+  CLUSTER_MODE_AUTO = 2;        // drift-reconcile; deferred, rejected in v1
+}
+
 // ---------------------------------------------------------------------------
 // Cluster — cluster-wide desired + observed state. One per managed cluster.
 // ---------------------------------------------------------------------------
@@ -25,6 +32,8 @@ message Cluster {
   ClusterObserved observed = 3;  // cache; in-memory only (datastore.md §2)
   ClusterEndpoints endpoints = 4;
   uint64 revision = 5;           // last-write revision (datastore.md §4)
+  ClusterMode mode = 6;          // rollout trigger mode; default (unspecified) = manual
+  bool rollouts_enabled = 7;     // hard guard (rollout-safety.md §3); default off, never set by seed
 }
 
 message ClusterDesired {
@@ -133,4 +142,38 @@ enum ClusterRolloutPhase {
   CLUSTER_ROLLOUT_PHASE_IDLE = 1;
   CLUSTER_ROLLOUT_PHASE_UPGRADING = 2;
   CLUSTER_ROLLOUT_PHASE_FAILED = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Rollout — the explicit job that authorizes and tracks an upgrade
+// (design/rollout-safety.md §5). Rollouts run only from a job, never from
+// desired↔observed drift (in manual mode). Persisted (precious during a run).
+// ---------------------------------------------------------------------------
+enum RolloutKind {
+  ROLLOUT_KIND_UNSPECIFIED = 0;
+  ROLLOUT_KIND_TALOS = 1;
+  ROLLOUT_KIND_KUBERNETES = 2;
+}
+
+enum RolloutJobState {
+  ROLLOUT_JOB_STATE_UNSPECIFIED = 0;
+  ROLLOUT_JOB_STATE_PENDING = 1;
+  ROLLOUT_JOB_STATE_RUNNING = 2;
+  ROLLOUT_JOB_STATE_PAUSED = 3;
+  ROLLOUT_JOB_STATE_FAILED = 4;
+  ROLLOUT_JOB_STATE_DONE = 5;
+  ROLLOUT_JOB_STATE_CANCELLED = 6;
+}
+
+message Rollout {
+  string cluster = 1;
+  string pool = 2;                  // talos path; empty + KUBERNETES = cluster-wide (M3)
+  RolloutKind kind = 3;
+  string target_version = 4;
+  RolloutJobState state = 5;
+  string created_by = 6;
+  string created_at = 7;            // RFC3339, stamped at the API boundary
+  repeated string planned_targets = 8; // machines captured at plan time
+  string message = 9;
+  uint64 revision = 10;
 }

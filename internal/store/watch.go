@@ -132,12 +132,22 @@ func (s *BoltStore) snapshotEvents(since, upto Revision) ([]Event, error) {
 		}); err != nil {
 			return err
 		}
-		return rol.Bucket(sClusters).ForEach(func(_, v []byte) error {
+		if err := rol.Bucket(sClusters).ForEach(func(_, v []byte) error {
 			r := &pb.ClusterRollout{}
 			if err := proto.Unmarshal(v, r); err != nil {
 				return err
 			}
 			add(KindClusterRollout, r.Cluster, Revision(r.Revision))
+			return nil
+		}); err != nil {
+			return err
+		}
+		return rol.Bucket(sJobs).ForEach(func(_, v []byte) error {
+			r := &pb.Rollout{}
+			if err := proto.Unmarshal(v, r); err != nil {
+				return err
+			}
+			add(KindRolloutJob, r.Cluster+"/"+r.Pool, Revision(r.Revision))
 			return nil
 		})
 	})

@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"errors"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -223,6 +224,141 @@ func rmw(body func() (store.Revision, error), expected uint64) (store.Revision, 
 		return 0, mapErr(err)
 	}
 	return 0, status.Error(codes.Aborted, "write contention")
+}
+
+// --- rollout safety (design/rollout-safety.md) ---
+
+func (s *Server) EnableRollouts(_ context.Context, req *pb.EnableRolloutsRequest) (*pb.Cluster, error) {
+	return s.setRolloutsEnabled(req.GetCluster(), true)
+}
+
+func (s *Server) DisableRollouts(_ context.Context, req *pb.EnableRolloutsRequest) (*pb.Cluster, error) {
+	return s.setRolloutsEnabled(req.GetCluster(), false)
+}
+
+func (s *Server) setRolloutsEnabled(cluster string, enabled bool) (*pb.Cluster, error) {
+	if cluster == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	var result *pb.Cluster
+	_, err := rmw(func() (store.Revision, error) {
+		c, rev, err := s.store.GetCluster(cluster)
+		if err != nil {
+			return 0, err
+		}
+		if c == nil {
+			return 0, status.Errorf(codes.NotFound, "cluster %q not found", cluster)
+		}
+		c.RolloutsEnabled = enabled
+		nr, err := s.store.PutClusterDesired(c, rev)
+		if err != nil {
+			return 0, err
+		}
+		c.Revision = uint64(nr)
+		result = c
+		return nr, nil
+	}, 0)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateRollout authorizes and records an upgrade. It enforces the full guard
+// chain (rollout-safety.md §6) before anything is written.
+func (s *Server) CreateRollout(_ context.Context, req *pb.CreateRolloutRequest) (*pb.Rollout, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	if req.GetTargetVersion() == "" {
+		return nil, status.Error(codes.InvalidArgument, "target_version required")
+	}
+
+	c, _, err := s.store.GetCluster(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if c == nil {
+		return nil, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+	}
+	if !c.GetRolloutsEnabled() {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"rollouts not enabled for cluster %q; run `medea cluster enable-rollouts %s`", req.GetCluster(), req.GetCluster())
+	}
+	if c.GetMode() == pb.ClusterMode_CLUSTER_MODE_AUTO {
+		return nil, status.Error(codes.Unimplemented, "auto (drift-reconcile) mode is not supported in v1")
+	}
+
+	switch req.GetKind() {
+	case pb.RolloutKind_ROLLOUT_KIND_TALOS:
+		return s.createTalosRollout(req)
+	case pb.RolloutKind_ROLLOUT_KIND_KUBERNETES:
+		return nil, status.Error(codes.Unimplemented, "kubernetes rollouts land in M3")
+	default:
+		return nil, status.Error(codes.InvalidArgument, "kind must be TALOS or KUBERNETES")
+	}
+}
+
+func (s *Server) createTalosRollout(req *pb.CreateRolloutRequest) (*pb.Rollout, error) {
+	if req.GetPool() == "" {
+		return nil, status.Error(codes.InvalidArgument, "pool required for a talos rollout")
+	}
+	np, _, err := s.store.GetNodePool(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if np == nil {
+		return nil, status.Errorf(codes.NotFound, "nodepool %q/%q not found", req.GetCluster(), req.GetPool())
+	}
+
+	// Set desired = target (so the reconciler converges to it), then record the
+	// job. Both are guarded by the checks above.
+	if _, err := rmw(func() (store.Revision, error) {
+		cur, rev, err := s.store.GetNodePool(req.GetCluster(), req.GetPool())
+		if err != nil {
+			return 0, err
+		}
+		if cur == nil {
+			return 0, status.Errorf(codes.NotFound, "nodepool %q/%q not found", req.GetCluster(), req.GetPool())
+		}
+		if cur.Desired == nil {
+			cur.Desired = &pb.NodePoolDesired{}
+		}
+		cur.Desired.TalosVersion = req.GetTargetVersion()
+		return s.store.PutNodePoolDesired(cur, rev)
+	}, 0); err != nil {
+		return nil, err
+	}
+
+	job := &pb.Rollout{
+		Cluster:        req.GetCluster(),
+		Pool:           req.GetPool(),
+		Kind:           pb.RolloutKind_ROLLOUT_KIND_TALOS,
+		TargetVersion:  req.GetTargetVersion(),
+		State:          pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING,
+		CreatedBy:      req.GetCreatedBy(),
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		PlannedTargets: np.GetMembers(),
+	}
+	if err := s.store.PutRolloutJob(job); err != nil {
+		return nil, mapErr(err)
+	}
+	saved, err := s.store.GetRolloutJob(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return saved, nil
+}
+
+func (s *Server) ListRollouts(_ context.Context, req *pb.ListRolloutsRequest) (*pb.ListRolloutsResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	jobs, err := s.store.ListRolloutJobs(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.ListRolloutsResponse{Rollouts: jobs}, nil
 }
 
 // --- watch ---

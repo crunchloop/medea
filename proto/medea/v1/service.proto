@@ -23,6 +23,12 @@ service Medea {
   rpc PauseRollout(PauseRolloutRequest) returns (RolloutControlResponse);
   rpc ResumeRollout(ResumeRolloutRequest) returns (RolloutControlResponse);
 
+  // --- rollout safety (design/rollout-safety.md) ---
+  rpc EnableRollouts(EnableRolloutsRequest) returns (Cluster);
+  rpc DisableRollouts(EnableRolloutsRequest) returns (Cluster);
+  rpc CreateRollout(CreateRolloutRequest) returns (Rollout);
+  rpc ListRollouts(ListRolloutsRequest) returns (ListRolloutsResponse);
+
   // --- watch ---
   rpc Watch(WatchRequest) returns (stream WatchEvent);
 }
@@ -94,6 +100,26 @@ message ResumeRolloutRequest {
 
 message RolloutControlResponse {
   uint64 revision = 1;
+}
+
+message EnableRolloutsRequest {
+  string cluster = 1;
+}
+
+message CreateRolloutRequest {
+  string cluster = 1;
+  string pool = 2;
+  RolloutKind kind = 3;
+  string target_version = 4;
+  string created_by = 5;
+}
+
+message ListRolloutsRequest {
+  string cluster = 1;
+}
+
+message ListRolloutsResponse {
+  repeated Rollout rollouts = 1;
 }
 
 message WatchRequest {

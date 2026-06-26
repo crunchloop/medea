@@ -11,6 +11,7 @@ lint:
     - SERVICE_SUFFIX             # service is `Medea`, not `MedeaService`
     - RPC_RESPONSE_STANDARD_NAME # GetCluster returns Cluster; Watch streams WatchEvent
     - RPC_REQUEST_RESPONSE_UNIQUE # SetVersionsResponse / RolloutControlResponse are shared
+    - RPC_REQUEST_STANDARD_NAME  # Enable/DisableRollouts share EnableRolloutsRequest
 breaking:
   use:
     - FILE

@@ -36,6 +36,7 @@ const (
 	KindMachine        EventKind = "machine"
 	KindMachineRollout EventKind = "machine_rollout"
 	KindClusterRollout EventKind = "cluster_rollout"
+	KindRolloutJob     EventKind = "rollout_job"
 )
 
 // Event is published after a persisted write commits (datastore.md §5).
@@ -54,6 +55,7 @@ var (
 	sClusters = []byte("clusters")
 	sNodePool = []byte("nodepools")
 	sMachines = []byte("machines")
+	sJobs     = []byte("jobs")
 
 	kRevision = []byte("revision")
 )
@@ -79,6 +81,10 @@ type Store interface {
 	PutMachineRollout(r *pb.MachineRollout) error
 	GetClusterRollout(cluster string) (*pb.ClusterRollout, error)
 	PutClusterRollout(r *pb.ClusterRollout) error
+
+	GetRolloutJob(cluster, pool string) (*pb.Rollout, error)
+	ListRolloutJobs(cluster string) ([]*pb.Rollout, error)
+	PutRolloutJob(r *pb.Rollout) error
 
 	SetClusterObserved(cluster string, o *pb.ClusterObserved)
 	SetMachineObserved(cluster, addr string, o *pb.MachineObserved)
@@ -141,7 +147,7 @@ func Open(path string) (*BoltStore, error) {
 				return err
 			}
 		}
-		for _, sub := range [][]byte{sClusters, sMachines} {
+		for _, sub := range [][]byte{sClusters, sMachines, sJobs} {
 			if _, err := rol.CreateBucketIfNotExists(sub); err != nil {
 				return err
 			}
@@ -266,6 +272,8 @@ func marshalWithRev(msg proto.Message, rev Revision) ([]byte, error) {
 	case *pb.MachineRollout:
 		m.Revision = uint64(rev)
 	case *pb.ClusterRollout:
+		m.Revision = uint64(rev)
+	case *pb.Rollout:
 		m.Revision = uint64(rev)
 	default:
 		return nil, fmt.Errorf("store: unsupported message %T", msg)
@@ -477,6 +485,47 @@ func (s *BoltStore) PutClusterRollout(r *pb.ClusterRollout) error {
 		return errors.New("store: cluster rollout cluster required")
 	}
 	return s.putLWW(sClusters, []byte(r.Cluster), r, KindClusterRollout, r.Cluster)
+}
+
+// --- Rollout jobs (LWW; one active job per cluster/pool) ---
+
+func (s *BoltStore) GetRolloutJob(cluster, pool string) (*pb.Rollout, error) {
+	var r *pb.Rollout
+	err := s.db.View(func(tx *bolt.Tx) error {
+		raw := tx.Bucket(bRollouts).Bucket(sJobs).Get(ckey(cluster, pool))
+		if raw == nil {
+			return nil
+		}
+		r = &pb.Rollout{}
+		return proto.Unmarshal(raw, r)
+	})
+	return r, err
+}
+
+func (s *BoltStore) ListRolloutJobs(cluster string) ([]*pb.Rollout, error) {
+	var out []*pb.Rollout
+	prefix := []byte(cluster + "\x00")
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bRollouts).Bucket(sJobs).ForEach(func(k, v []byte) error {
+			if !hasPrefix(k, prefix) {
+				return nil
+			}
+			r := &pb.Rollout{}
+			if err := proto.Unmarshal(v, r); err != nil {
+				return err
+			}
+			out = append(out, r)
+			return nil
+		})
+	})
+	return out, err
+}
+
+func (s *BoltStore) PutRolloutJob(r *pb.Rollout) error {
+	if r.GetCluster() == "" {
+		return errors.New("store: rollout cluster required")
+	}
+	return s.putLWW(sJobs, ckey(r.Cluster, r.Pool), r, KindRolloutJob, r.Cluster+"/"+r.Pool)
 }
 
 // --- Observed (in-memory cache) ---

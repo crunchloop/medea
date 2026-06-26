@@ -32,6 +32,10 @@ const (
 	Medea_SetNodePoolVersion_FullMethodName = "/medea.v1.Medea/SetNodePoolVersion"
 	Medea_PauseRollout_FullMethodName       = "/medea.v1.Medea/PauseRollout"
 	Medea_ResumeRollout_FullMethodName      = "/medea.v1.Medea/ResumeRollout"
+	Medea_EnableRollouts_FullMethodName     = "/medea.v1.Medea/EnableRollouts"
+	Medea_DisableRollouts_FullMethodName    = "/medea.v1.Medea/DisableRollouts"
+	Medea_CreateRollout_FullMethodName      = "/medea.v1.Medea/CreateRollout"
+	Medea_ListRollouts_FullMethodName       = "/medea.v1.Medea/ListRollouts"
 	Medea_Watch_FullMethodName              = "/medea.v1.Medea/Watch"
 )
 
@@ -50,6 +54,11 @@ type MedeaClient interface {
 	SetNodePoolVersion(ctx context.Context, in *SetNodePoolVersionRequest, opts ...grpc.CallOption) (*SetVersionsResponse, error)
 	PauseRollout(ctx context.Context, in *PauseRolloutRequest, opts ...grpc.CallOption) (*RolloutControlResponse, error)
 	ResumeRollout(ctx context.Context, in *ResumeRolloutRequest, opts ...grpc.CallOption) (*RolloutControlResponse, error)
+	// --- rollout safety (design/rollout-safety.md) ---
+	EnableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error)
+	DisableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error)
+	CreateRollout(ctx context.Context, in *CreateRolloutRequest, opts ...grpc.CallOption) (*Rollout, error)
+	ListRollouts(ctx context.Context, in *ListRolloutsRequest, opts ...grpc.CallOption) (*ListRolloutsResponse, error)
 	// --- watch ---
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
@@ -152,6 +161,46 @@ func (c *medeaClient) ResumeRollout(ctx context.Context, in *ResumeRolloutReques
 	return out, nil
 }
 
+func (c *medeaClient) EnableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Cluster)
+	err := c.cc.Invoke(ctx, Medea_EnableRollouts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) DisableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Cluster)
+	err := c.cc.Invoke(ctx, Medea_DisableRollouts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) CreateRollout(ctx context.Context, in *CreateRolloutRequest, opts ...grpc.CallOption) (*Rollout, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Rollout)
+	err := c.cc.Invoke(ctx, Medea_CreateRollout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) ListRollouts(ctx context.Context, in *ListRolloutsRequest, opts ...grpc.CallOption) (*ListRolloutsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRolloutsResponse)
+	err := c.cc.Invoke(ctx, Medea_ListRollouts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *medeaClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Medea_ServiceDesc.Streams[0], Medea_Watch_FullMethodName, cOpts...)
@@ -186,6 +235,11 @@ type MedeaServer interface {
 	SetNodePoolVersion(context.Context, *SetNodePoolVersionRequest) (*SetVersionsResponse, error)
 	PauseRollout(context.Context, *PauseRolloutRequest) (*RolloutControlResponse, error)
 	ResumeRollout(context.Context, *ResumeRolloutRequest) (*RolloutControlResponse, error)
+	// --- rollout safety (design/rollout-safety.md) ---
+	EnableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error)
+	DisableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error)
+	CreateRollout(context.Context, *CreateRolloutRequest) (*Rollout, error)
+	ListRollouts(context.Context, *ListRolloutsRequest) (*ListRolloutsResponse, error)
 	// --- watch ---
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedMedeaServer()
@@ -224,6 +278,18 @@ func (UnimplementedMedeaServer) PauseRollout(context.Context, *PauseRolloutReque
 }
 func (UnimplementedMedeaServer) ResumeRollout(context.Context, *ResumeRolloutRequest) (*RolloutControlResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResumeRollout not implemented")
+}
+func (UnimplementedMedeaServer) EnableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnableRollouts not implemented")
+}
+func (UnimplementedMedeaServer) DisableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisableRollouts not implemented")
+}
+func (UnimplementedMedeaServer) CreateRollout(context.Context, *CreateRolloutRequest) (*Rollout, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRollout not implemented")
+}
+func (UnimplementedMedeaServer) ListRollouts(context.Context, *ListRolloutsRequest) (*ListRolloutsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRollouts not implemented")
 }
 func (UnimplementedMedeaServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
@@ -411,6 +477,78 @@ func _Medea_ResumeRollout_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Medea_EnableRollouts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableRolloutsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).EnableRollouts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_EnableRollouts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).EnableRollouts(ctx, req.(*EnableRolloutsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_DisableRollouts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableRolloutsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).DisableRollouts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_DisableRollouts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).DisableRollouts(ctx, req.(*EnableRolloutsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_CreateRollout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRolloutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).CreateRollout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_CreateRollout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).CreateRollout(ctx, req.(*CreateRolloutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_ListRollouts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRolloutsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).ListRollouts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_ListRollouts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).ListRollouts(ctx, req.(*ListRolloutsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Medea_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -464,6 +602,22 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResumeRollout",
 			Handler:    _Medea_ResumeRollout_Handler,
+		},
+		{
+			MethodName: "EnableRollouts",
+			Handler:    _Medea_EnableRollouts_Handler,
+		},
+		{
+			MethodName: "DisableRollouts",
+			Handler:    _Medea_DisableRollouts_Handler,
+		},
+		{
+			MethodName: "CreateRollout",
+			Handler:    _Medea_CreateRollout_Handler,
+		},
+		{
+			MethodName: "ListRollouts",
+			Handler:    _Medea_ListRollouts_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

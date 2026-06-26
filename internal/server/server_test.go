@@ -164,6 +164,103 @@ func TestSetClusterVersionsNotFound(t *testing.T) {
 	}
 }
 
+func seedPoolFor(t *testing.T, st *store.BoltStore, cluster, pool string) {
+	t.Helper()
+	if _, err := st.PutNodePoolDesired(&pb.NodePool{
+		Cluster: cluster, Name: pool, Role: pb.Role_ROLE_WORKER,
+		Members: []string{"10.0.0.11"}, Desired: &pb.NodePoolDesired{},
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateRolloutRefusedWhenNotEnabled(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1") // rolloutsEnabled defaults false
+	seedPoolFor(t, st, "home", "workers")
+
+	_, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "home", Pool: "workers",
+		Kind: pb.RolloutKind_ROLLOUT_KIND_TALOS, TargetVersion: "v1.13.6",
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("not-enabled: code=%v, want FailedPrecondition", status.Code(err))
+	}
+	// And nothing was recorded.
+	if list, _ := c.ListRollouts(ctx, &pb.ListRolloutsRequest{Cluster: "home"}); len(list.GetRollouts()) != 0 {
+		t.Fatalf("a job was created despite refusal: %+v", list.GetRollouts())
+	}
+}
+
+func TestEnableThenCreateRollout(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1")
+	seedPoolFor(t, st, "home", "workers")
+
+	cl, err := c.EnableRollouts(ctx, &pb.EnableRolloutsRequest{Cluster: "home"})
+	if err != nil || !cl.GetRolloutsEnabled() {
+		t.Fatalf("enable: %v / enabled=%v", err, cl.GetRolloutsEnabled())
+	}
+
+	job, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "home", Pool: "workers",
+		Kind: pb.RolloutKind_ROLLOUT_KIND_TALOS, TargetVersion: "v1.13.6", CreatedBy: "tester",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if job.GetState() != pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING || job.GetTargetVersion() != "v1.13.6" {
+		t.Fatalf("job wrong: %+v", job)
+	}
+	if job.GetCreatedAt() == "" {
+		t.Fatal("created_at not stamped")
+	}
+	// desired was set to the target.
+	np, _ := c.ListNodePools(ctx, &pb.ListNodePoolsRequest{Cluster: "home"})
+	if np.GetNodePools()[0].GetDesired().GetTalosVersion() != "v1.13.6" {
+		t.Fatalf("desired not set: %+v", np.GetNodePools()[0].GetDesired())
+	}
+}
+
+func TestCreateRolloutRejectsAutoMode(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	// Cluster enabled but in AUTO mode -> rejected in v1.
+	if _, err := st.PutClusterDesired(&pb.Cluster{
+		Name: "home", Desired: &pb.ClusterDesired{}, RolloutsEnabled: true,
+		Mode: pb.ClusterMode_CLUSTER_MODE_AUTO,
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	seedPoolFor(t, st, "home", "workers")
+
+	_, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "home", Pool: "workers",
+		Kind: pb.RolloutKind_ROLLOUT_KIND_TALOS, TargetVersion: "v1.13.6",
+	})
+	if status.Code(err) != codes.Unimplemented {
+		t.Fatalf("auto mode: code=%v, want Unimplemented", status.Code(err))
+	}
+}
+
+func TestCreateRolloutUnknownClusterAndEmptyTarget(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newClient(t, serverToken)
+
+	if _, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "ghost", Pool: "workers", Kind: pb.RolloutKind_ROLLOUT_KIND_TALOS, TargetVersion: "v1.13.6",
+	}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown cluster: code=%v, want NotFound", status.Code(err))
+	}
+	if _, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "ghost", Pool: "workers", Kind: pb.RolloutKind_ROLLOUT_KIND_TALOS,
+	}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("empty target: code=%v, want InvalidArgument", status.Code(err))
+	}
+}
+
 func TestWatchSnapshotThenLive(t *testing.T) {
 	c, st := newClient(t, serverToken)
 	seedCluster(t, st, "home", "v1.36.1") // revision 1
