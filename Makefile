@@ -32,4 +32,7 @@ test-qemu: ## faithful UpgradeOS rollout on a real QEMU cluster (Apple Silicon +
 vet:
 	go vet ./...
 
-check: vet test ## what CI runs
+lint: ## run golangci-lint (install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest)
+	golangci-lint run ./...
+
+check: vet lint test ## what CI runs

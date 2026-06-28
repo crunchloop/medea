@@ -1,0 +1,63 @@
+# systemd unit for the Medea control plane.
+#
+# Install:
+#   install -m0755 medea /usr/local/bin/medea
+#   useradd --system --no-create-home --shell /usr/sbin/nologin medea
+#   install -o medea -g medea -d -m0700 /etc/medea /etc/medea/tls
+#   printf '%s' "<a-long-random-token>" | install -o medea -g medea -m0600 /dev/stdin /etc/medea/token
+#   # seed first (server stopped), then:
+#   cp deploy/medea.service /etc/systemd/system/medea.service
+#   systemctl daemon-reload && systemctl enable --now medea
+#
+# State (store, creds, snapshots) lives under /var/lib/medea, created and owned by
+# systemd via StateDirectory. Credentials go in /var/lib/medea/creds/<cluster>/
+# (talosconfig + kubeconfig, mode 0600) — put there by `medea seed`.
+#
+# Run Medea somewhere that is NOT the cluster it manages (PRD §13 #10).
+
+[Unit]
+Description=Medea — external control plane for Talos clusters
+Documentation=https://github.com/bilby91/medea
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=medea
+Group=medea
+ExecStart=/usr/local/bin/medea serve \
+  --listen 0.0.0.0:7600 \
+  --store /var/lib/medea/medea.db \
+  --creds-dir /var/lib/medea/creds \
+  --snapshot-dir /var/lib/medea/snapshots \
+  --token-file /etc/medea/token \
+  --tls-cert /etc/medea/tls/cert.pem \
+  --tls-key /etc/medea/tls/key.pem \
+  --rollouts
+Restart=on-failure
+RestartSec=5
+
+# systemd creates/owns these (0700).
+StateDirectory=medea
+StateDirectoryMode=0700
+ConfigurationDirectory=medea
+ConfigurationDirectoryMode=0700
+
+# Hardening — Medea only needs the network and its own state dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/var/lib/medea
+# MemoryDenyWriteExecute=true is usually fine for a pure-Go binary; enable it if
+# your build has no cgo and starts cleanly.
+
+[Install]
+WantedBy=multi-user.target

@@ -27,7 +27,6 @@ type fakeTalos struct {
 	failUpgrade   map[string]error
 	upgrades      []upgradeCall
 	snapshots     []string
-	snapshotBytes []byte
 }
 
 func (f *fakeTalos) Version(_ context.Context, node string) (string, error) {
@@ -182,7 +181,7 @@ func newReconciler(t *testing.T, ft *fakeTalos, fk *fakeKube) (*Reconciler, *sto
 	return r, st
 }
 
-func seedPool(t *testing.T, st *store.BoltStore, role pb.Role, members []string, clusterTarget string, strat *pb.RolloutStrategy) {
+func seedPool(t *testing.T, st *store.BoltStore, role pb.Role, members []string, clusterTarget string, strategy *pb.RolloutStrategy) {
 	t.Helper()
 	if _, err := st.PutClusterDesired(&pb.Cluster{
 		Name: "home", Desired: &pb.ClusterDesired{TalosVersion: clusterTarget},
@@ -195,7 +194,7 @@ func seedPool(t *testing.T, st *store.BoltStore, role pb.Role, members []string,
 	}
 	if _, err := st.PutNodePoolDesired(&pb.NodePool{
 		Cluster: "home", Name: name, Role: role, Members: members,
-		Desired: &pb.NodePoolDesired{}, Strategy: strat,
+		Desired: &pb.NodePoolDesired{}, Strategy: strategy,
 	}, 0); err != nil {
 		t.Fatal(err)
 	}

@@ -221,13 +221,13 @@ func sameVersion(a, b string) bool {
 }
 
 // upgradeNode runs one node through the OS-path state machine.
-func (r *Reconciler) upgradeNode(ctx context.Context, cluster string, role pb.Role, addr, name, target string, strat *pb.RolloutStrategy) error {
+func (r *Reconciler) upgradeNode(ctx context.Context, cluster string, role pb.Role, addr, name, target string, strategy *pb.RolloutStrategy) error {
 	if name == "" {
 		return r.fail(cluster, addr, target, "node not found in cluster (cannot drain)")
 	}
 
 	// Snapshot before mutating a control-plane node — the only undo on non-HA.
-	if role == pb.Role_ROLE_CONTROLPLANE && strat.GetSnapshotBeforeControlPlane() {
+	if role == pb.Role_ROLE_CONTROLPLANE && strategy.GetSnapshotBeforeControlPlane() {
 		if err := r.snapshot(ctx, cluster, addr); err != nil {
 			return r.fail(cluster, addr, target, fmt.Sprintf("etcd snapshot: %v", err))
 		}
@@ -235,7 +235,7 @@ func (r *Reconciler) upgradeNode(ctx context.Context, cluster string, role pb.Ro
 
 	// Drain (cordons internally; PDB-respecting; no force).
 	r.setState(cluster, addr, pb.RolloutState_ROLLOUT_STATE_DRAINING, target, "draining")
-	drainTimeout := strat.GetDrainTimeout().AsDuration()
+	drainTimeout := strategy.GetDrainTimeout().AsDuration()
 	if drainTimeout <= 0 {
 		drainTimeout = 5 * time.Minute
 	}

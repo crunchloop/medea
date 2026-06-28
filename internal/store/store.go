@@ -155,7 +155,7 @@ func Open(path string) (*BoltStore, error) {
 		s.lastRev = readRev(meta)
 		return nil
 	}); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return s, nil

@@ -63,7 +63,10 @@ func (t *Client) Version(ctx context.Context, node string) (string, error) {
 // DESTRUCTIVE: reboots the node. Only ever invoked by the rollout reconciler
 // after drain + (for control-plane) an etcd snapshot.
 func (t *Client) UpgradeOS(ctx context.Context, node, image string) error {
-	_, err := t.c.UpgradeWithOptions(talosclient.WithNodes(ctx, node),
+	// UpgradeWithOptions is marked deprecated upstream in favor of LifecycleClient,
+	// but remains supported and correct for the pinned Talos v1.13; the OS-path is
+	// QEMU-validated against it. Migration to LifecycleClient is tracked separately.
+	_, err := t.c.UpgradeWithOptions(talosclient.WithNodes(ctx, node), //nolint:staticcheck // SA1019: supported in v1.13; migrate later
 		talosclient.WithUpgradeImage(image),
 		talosclient.WithUpgradeRebootMode(machineapi.UpgradeRequest_DEFAULT),
 	)
@@ -78,7 +81,7 @@ func (t *Client) EtcdSnapshot(ctx context.Context, node string, w io.Writer) err
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	_, err = io.Copy(w, rc)
 	return err
 }
