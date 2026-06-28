@@ -24,17 +24,17 @@ reasoning stays useful after the work ships.
 | [`rollout-safety.md`](rollout-safety.md) | How rollouts are triggered + the guards making accidental action impossible: per-cluster `mode` (manual default), `rolloutsEnabled` (default off), plan/confirm, boot safety. Reverses rollout-controller.md §1. |
 | [`provisioning-plane.md`](provisioning-plane.md) | **(v2, Draft for review)** Layer-0: the `Host` inventory aggregate + `NodePool` replicas/selector, the Matchbox driver, spec-based machine-config generation, Image-Factory schematic resolution, secrets capture, and the join-existing-cluster reconciler. Power-agnostic (the `Power` interface is a v4 seam). |
 | [`backup.md`](backup.md) | **(v3, Draft for review)** Scheduled backups + restore: a pluggable `BackupTarget` (local + S3/MinIO), an encrypted full-DR bundle (etcd + desired + secrets, `age`), interval+keep-N scheduling, and a plan-then-confirm `RestoreEtcd` primitive that v4 control-plane repair reuses. |
+| [`auto-repair.md`](auto-repair.md) | **(v4, Draft for review)** Detect a failed node (sustained-unreachable, debounced) and reprovision it: the `RepairJob` state machine, worker auto-repair vs semi-automatic (human-confirmed) control-plane restore, the `Power` driver (smart-plug/Redfish/WoL/none) with graceful degradation, and the safety gates. Builds on v2 + v3. |
 
 These records are **decision-oriented** (why each subsystem looks the way it
 does). For the **domain lens** — bounded contexts and the strategic map, see
 [`../DOMAIN.md`](../DOMAIN.md); per-aggregate invariant/lifecycle records, see
 [`aggregates/`](aggregates/README.md).
 
-Planned design records (to be written as work approaches):
-
-- `auto-repair.md` — (v4) failure detection + the `Power` driver
-  (WoL/smart-plug/Redfish); reprovision a dead node, then restore etcd (v3) for a
-  control-plane node. Builds on the provisioning plane and restore.
+Planned design records (to be written as work approaches): none pending — v1–v4
+are all recorded above. Records for further-deferred ideas (auth hardening:
+mTLS/OIDC/RBAC; a declarative `apply -f` input; a web/fleet UI) will be written
+when those are scoped.
 
 ## What's *not* here
 

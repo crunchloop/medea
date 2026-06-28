@@ -344,6 +344,14 @@ Resolved during v3 scoping (2026-06-28) — full detail in `design/backup.md`:
 29. **Schedule = fixed interval + keep-N per cluster**, `backup.enabled` default off (same posture as `rolloutsEnabled`). Cron/GFS tiers deferred.
 30. **Restore = guarded plan-then-confirm `RestoreEtcd` primitive** (stronger confirmation than upgrades — it re-bootstraps single-member etcd), exposed via CLI and callable by v4 auto-repair. This is why restore lands in v3, before repair.
 
+Resolved during v4 scoping (2026-06-28) — full detail in `design/auto-repair.md`:
+
+31. **Detection = sustained unreachable, debounced** (kube-NotReady AND Talos-unreachable past a threshold, across consecutive refresh passes), suppressed while the node has a rollout/provision in flight. Reuses the observed-state refresh loop.
+32. **Repair action = reprovision the same host** (worker: drain→deprovision→reprovision via v2→rejoin; CP: reprovision→`RestoreEtcd`→rejoin).
+33. **Control-plane repair is semi-automatic** — workers auto (gated); a CP failure is detected and a restore plan prepared, but a human `--confirm`s the etcd restore (too destructive to automate on single-master). Fully-auto CP repair becomes reasonable only once the cluster is HA.
+34. **`Power` is a pluggable driver with graceful degradation** — smart-plug/Redfish (true cycle → hands-off) | WoL (cleanly-off only) | none (stage reprovision + notify a human to power-cycle). Concrete Beelink impl pinned after the hardware capability check.
+35. **Auto-repair safety**: per-cluster `autoRepairEnabled` (default off, never seeded), one repair at a time per cluster, cooldown + max-attempts (no repair storms), and never-repair-an-intentionally-down-node. Inherits the `rollout-safety.md` posture.
+
 To be resolved (non-blocking — do not block M1/M2 code):
 
 10. **Where Medea runs / is deployed.** systemd unit on a small always-on box vs container vs operator workstation. Must be somewhere that is *not* the managed cluster. *Candidate: the netboot host on `10.0.0.0/24`.*
@@ -372,8 +380,9 @@ Sequenced by dependency (§13 #19). Detail in the per-pillar design records.
 - **v3 — Backup + restore** (`design/backup.md`). `BackupTarget` seam + bundle +
   `age` encryption (v3-M1), interval/keep-N scheduler + history (v3-M2), the
   guarded `RestoreEtcd` primitive control-plane repair depends on (v3-M3).
-- **v4 — Auto-repair** (`design/auto-repair.md`, planned). Failure detection + a
-  `Power` driver (WoL/smart-plug/Redfish); reprovision a dead node.
+- **v4 — Auto-repair** (`design/auto-repair.md`). Detector + `RepairJob` +
+  safety gates (v4-M1), worker auto-repair + the `Power` seam/WoL + degraded
+  mode (v4-M2), semi-automatic control-plane recovery via `RestoreEtcd` (v4-M3).
 
 ---
 
