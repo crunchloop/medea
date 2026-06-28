@@ -337,6 +337,13 @@ Resolved during v2 scoping (2026-06-28) — full detail in `design/provisioning-
 25. **Medea owns the cluster machine-secrets bundle** — captured from the live cluster into the `CredentialStore`, used to mint join configs; never in bbolt, never exported.
 26. **Provisioning is power-agnostic.** Stage boot + wait (manual/WoL power-on); a `Power` interface is a v4 seam (Beelinks have no BMC).
 
+Resolved during v3 scoping (2026-06-28) — full detail in `design/backup.md`:
+
+27. **Backup destination = a pluggable `BackupTarget`** (local + S3/MinIO first; 1Password later). Off-box durability for etcd snapshots.
+28. **A backup is a full DR bundle** — etcd snapshot + desired-state export + cluster secrets bundle. Because it contains secrets, it is **client-side encrypted (`age`)** with the decryption identity escrowed out-of-band (1Password). This *supersedes, for the encrypted DR path only*, the v1 "credentials are never serialized" stance (`api-and-auth.md` §5, `datastore.md` §9); the plaintext desired-state auto-export stays secret-free.
+29. **Schedule = fixed interval + keep-N per cluster**, `backup.enabled` default off (same posture as `rolloutsEnabled`). Cron/GFS tiers deferred.
+30. **Restore = guarded plan-then-confirm `RestoreEtcd` primitive** (stronger confirmation than upgrades — it re-bootstraps single-member etcd), exposed via CLI and callable by v4 auto-repair. This is why restore lands in v3, before repair.
+
 To be resolved (non-blocking — do not block M1/M2 code):
 
 10. **Where Medea runs / is deployed.** systemd unit on a small always-on box vs container vs operator workstation. Must be somewhere that is *not* the managed cluster. *Candidate: the netboot host on `10.0.0.0/24`.*
@@ -362,8 +369,9 @@ Sequenced by dependency (§13 #19). Detail in the per-pillar design records.
   existing cluster: `Host` inventory + `NodePool` replicas/selector (v2-M1),
   Matchbox driver + spec-based config/schematic generation (v2-M2), the
   join-existing reconciler (v2-M3), scale-in/replacement + hardening (v2-M4).
-- **v3 — Backup + restore** (`design/backup.md`, planned). Snapshot
-  schedule/retention/destination; the restore flow control-plane repair depends on.
+- **v3 — Backup + restore** (`design/backup.md`). `BackupTarget` seam + bundle +
+  `age` encryption (v3-M1), interval/keep-N scheduler + history (v3-M2), the
+  guarded `RestoreEtcd` primitive control-plane repair depends on (v3-M3).
 - **v4 — Auto-repair** (`design/auto-repair.md`, planned). Failure detection + a
   `Power` driver (WoL/smart-plug/Redfish); reprovision a dead node.
 

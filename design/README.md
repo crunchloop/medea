@@ -23,6 +23,7 @@ reasoning stays useful after the work ships.
 | [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. (Trigger in §1 superseded by `rollout-safety.md`.) |
 | [`rollout-safety.md`](rollout-safety.md) | How rollouts are triggered + the guards making accidental action impossible: per-cluster `mode` (manual default), `rolloutsEnabled` (default off), plan/confirm, boot safety. Reverses rollout-controller.md §1. |
 | [`provisioning-plane.md`](provisioning-plane.md) | **(v2, Draft for review)** Layer-0: the `Host` inventory aggregate + `NodePool` replicas/selector, the Matchbox driver, spec-based machine-config generation, Image-Factory schematic resolution, secrets capture, and the join-existing-cluster reconciler. Power-agnostic (the `Power` interface is a v4 seam). |
+| [`backup.md`](backup.md) | **(v3, Draft for review)** Scheduled backups + restore: a pluggable `BackupTarget` (local + S3/MinIO), an encrypted full-DR bundle (etcd + desired + secrets, `age`), interval+keep-N scheduling, and a plan-then-confirm `RestoreEtcd` primitive that v4 control-plane repair reuses. |
 
 These records are **decision-oriented** (why each subsystem looks the way it
 does). For the **domain lens** — bounded contexts and the strategic map, see
@@ -31,12 +32,9 @@ does). For the **domain lens** — bounded contexts and the strategic map, see
 
 Planned design records (to be written as work approaches):
 
-- `backup.md` — (v3) the backup scheduler + restore flow (etcd snapshot
-  schedule/retention/destination, and the restore that control-plane auto-repair
-  needs). The v1 ad-hoc pre-mutation snapshot is its seed.
 - `auto-repair.md` — (v4) failure detection + the `Power` driver
-  (WoL/smart-plug/Redfish); reprovision a dead node. Builds on the provisioning
-  plane and restore.
+  (WoL/smart-plug/Redfish); reprovision a dead node, then restore etcd (v3) for a
+  control-plane node. Builds on the provisioning plane and restore.
 
 ## What's *not* here
 

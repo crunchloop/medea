@@ -233,3 +233,12 @@ there's something to drive.
   after a mutation; reconnect with `since_revision` resumes without gap.
 - **CredentialStore (unit):** files written 0600 under a 0700 dir; `Export`
   output contains no credential bytes.
+
+## Appendix — superseded by `backup.md` (v3)
+
+§5's claim that credentials have **no serialized form** holds for the
+desired-state `Export` (which stays secret-free), but is **extended** by the v3
+backup feature: the full-DR backup bundle *does* include the secrets bundle, as a
+**client-side-encrypted (`age`)** artifact with the decryption identity escrowed
+out-of-band. See [`backup.md`](backup.md) §4.1. The plaintext export path is
+unchanged.
