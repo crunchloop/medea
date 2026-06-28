@@ -23,6 +23,11 @@ reasoning stays useful after the work ships.
 | [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. (Trigger in §1 superseded by `rollout-safety.md`.) |
 | [`rollout-safety.md`](rollout-safety.md) | How rollouts are triggered + the guards making accidental action impossible: per-cluster `mode` (manual default), `rolloutsEnabled` (default off), plan/confirm, boot safety. Reverses rollout-controller.md §1. |
 
+These records are **decision-oriented** (why each subsystem looks the way it
+does). For the **domain lens** — bounded contexts and the strategic map, see
+[`../DOMAIN.md`](../DOMAIN.md); per-aggregate invariant/lifecycle records, see
+[`aggregates/`](aggregates/README.md).
+
 Planned design records (to be written as work approaches):
 
 - `provisioning-plane.md` — (deferred) the Layer-0 hardware inventory + netboot/PXE/matchbox driver; how "I want a node" becomes a booted Beelink. Blocks the future provisioning milestone.
