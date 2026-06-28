@@ -41,17 +41,21 @@ sudo chown -R "$(id -u):$(id -g)" "$DIR"
 echo ">> fetching kubeconfig (node $CPIP)"
 talosctl --talosconfig "$DIR/talosconfig" kubeconfig --force --nodes "$CPIP" "$DIR/kubeconfig"
 
-echo ">> running rollout validation (worker -> $TARGET)"
+echo ">> running rollout validation (worker, then control-plane -> $TARGET)"
+# -run TestQemuUpgrade matches both TestQemuUpgrade (worker) and
+# TestQemuUpgradeControlPlane (the CP reboot / resume-after-reboot path), run in
+# source order against this one cluster.
 set +e
 MEDEA_QEMU_TALOSCONFIG="$DIR/talosconfig" \
 MEDEA_QEMU_KUBECONFIG="$DIR/kubeconfig" \
 MEDEA_QEMU_TARGET="$TARGET" \
-  go test -tags integration -run TestQemuUpgrade -timeout 40m -v ./internal/itest/
+  go test -tags integration -run TestQemuUpgrade -timeout 75m -v ./internal/itest/
 rc=$?
 set -e
 
 if [ "${KEEP:-0}" = "1" ] && [ "$rc" -ne 0 ]; then
   echo ">> KEEP=1 and test failed: leaving cluster up for inspection."
+  echo "   cp:       sudo talosctl --talosconfig $DIR/talosconfig -n $CPIP dmesg"
   echo "   worker:   sudo talosctl --talosconfig $DIR/talosconfig -n 10.5.0.3 dmesg"
   echo "   k8s:      KUBECONFIG=$DIR/kubeconfig kubectl get nodes -o wide"
   echo "   destroy:  sudo talosctl cluster destroy --name $NAME"

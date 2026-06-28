@@ -109,6 +109,20 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 	}
 
 	for _, addr := range members {
+		// Resume safety: a node left mid-flight (Upgrading/WaitingHealthy) by a
+		// previous pass or a Medea restart may be rebooting and unreachable.
+		// Re-enter the wait (park-and-retry) instead of reading its version —
+		// which would error mid-reboot and halt the rollout. This is the
+		// resume-after-reboot path, critical for control-plane upgrades that take
+		// down the only apiserver (rollout-controller.md §4, PRD App. B).
+		switch r.machineState(cluster, addr) {
+		case pb.RolloutState_ROLLOUT_STATE_UPGRADING, pb.RolloutState_ROLLOUT_STATE_WAITING_HEALTHY:
+			if err := r.finishUpgrade(ctx, cluster, addr, ipToName[addr], target); err != nil {
+				return err // node already marked Failed; halt the rollout
+			}
+			continue
+		}
+
 		cur, err := r.talos.Version(ctx, addr)
 		if err != nil {
 			return r.fail(cluster, addr, target, fmt.Sprintf("read version: %v", err))
@@ -240,17 +254,34 @@ func (r *Reconciler) upgradeNode(ctx context.Context, cluster string, role pb.Ro
 		return r.fail(cluster, addr, target, fmt.Sprintf("upgrade: %v", err))
 	}
 
-	// Wait until the node returns Ready and reports the target version.
+	// Wait for the node to converge, then uncordon and mark Done.
+	return r.finishUpgrade(ctx, cluster, addr, name, target)
+}
+
+// finishUpgrade waits for a (re)booting node to return Ready at the target
+// version, then uncordons it and marks it Done. It is the tail of upgradeNode
+// and also the resume re-entry point for a node left mid-flight — so a Medea
+// restart during a node's reboot resumes here rather than re-draining or
+// re-upgrading (idempotent resume, rollout-controller.md §4).
+func (r *Reconciler) finishUpgrade(ctx context.Context, cluster, addr, name, target string) error {
+	if name == "" {
+		return r.fail(cluster, addr, target, "node not found in cluster (cannot wait for health)")
+	}
 	r.setState(cluster, addr, pb.RolloutState_ROLLOUT_STATE_WAITING_HEALTHY, target, "waiting for healthy")
 	if err := r.waitHealthy(ctx, addr, name, target); err != nil {
 		return r.fail(cluster, addr, target, err.Error())
 	}
-
 	if err := r.kube.Uncordon(ctx, name); err != nil {
 		return r.fail(cluster, addr, target, fmt.Sprintf("uncordon: %v", err))
 	}
 	r.setState(cluster, addr, pb.RolloutState_ROLLOUT_STATE_DONE, target, "")
 	return nil
+}
+
+// machineState returns a node's last recorded rollout state (Idle if none).
+func (r *Reconciler) machineState(cluster, addr string) pb.RolloutState {
+	mr, _ := r.store.GetMachineRollout(cluster, addr)
+	return mr.GetState()
 }
 
 // waitHealthy polls until the node is Ready and at the target version, or times

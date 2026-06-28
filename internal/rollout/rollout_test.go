@@ -243,6 +243,50 @@ func TestUpgradesOutdatedNodes(t *testing.T) {
 	}
 }
 
+// A control-plane node left mid-flight (WaitingHealthy) — e.g. Medea restarted
+// during the reboot that took down the apiserver — must RESUME the wait on the
+// next pass: no re-snapshot, no re-drain, no re-upgrade. This is the
+// resume-after-reboot property that justifies Medea being external (PRD App. B).
+func TestResumesMidFlightNode(t *testing.T) {
+	ft := &fakeTalos{
+		versions:     map[string]string{"10.0.0.2": "v1.13.6"}, // node is back, at target
+		installImage: "ghcr.io/siderolabs/installer:v1.13.6",
+	}
+	fk := &fakeKube{nodes: []kube.NodeInfo{{Name: "cp1", InternalIP: "10.0.0.2", Role: "controlplane", Ready: true}}}
+	r, st := newReconciler(t, ft, fk)
+	seedPool(t, st, pb.Role_ROLE_CONTROLPLANE, []string{"10.0.0.2"}, "v1.13.6",
+		&pb.RolloutStrategy{MaxUnavailable: 1, SnapshotBeforeControlPlane: true})
+
+	// Recorded mid-flight state from a prior pass / before a restart.
+	if err := st.PutMachineRollout(&pb.MachineRollout{
+		Cluster: "home", Addr: "10.0.0.2",
+		State: pb.RolloutState_ROLLOUT_STATE_WAITING_HEALTHY, TargetTalosVersion: "v1.13.6",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.ReconcilePool(context.Background(), "home", "controlplane"); err != nil {
+		t.Fatalf("ReconcilePool: %v", err)
+	}
+
+	mr, _ := st.GetMachineRollout("home", "10.0.0.2")
+	if mr.GetState() != pb.RolloutState_ROLLOUT_STATE_DONE {
+		t.Fatalf("state = %v, want DONE", mr.GetState())
+	}
+	if len(ft.upgrades) != 0 {
+		t.Fatalf("resume must NOT re-upgrade: %+v", ft.upgrades)
+	}
+	if len(ft.snapshots) != 0 {
+		t.Fatalf("resume must NOT re-snapshot: %v", ft.snapshots)
+	}
+	if len(fk.drained) != 0 {
+		t.Fatalf("resume must NOT re-drain: %v", fk.drained)
+	}
+	if len(fk.uncordoned) != 1 {
+		t.Fatalf("resume should uncordon once after health, got %d", len(fk.uncordoned))
+	}
+}
+
 func TestSkipsAlreadyCurrentNode(t *testing.T) {
 	ft := &fakeTalos{
 		versions:     map[string]string{"10.0.0.3": "v1.13.6", "10.0.0.4": "v1.13.5"},

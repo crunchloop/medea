@@ -58,13 +58,22 @@ Per node, `upgradeNode` runs:
    are treated as not-ready-yet (park), not failure; timeout → `Failed`.
 7. **uncordon** → `Done`.
 
-**Resume is re-derivation, not state-replay.** On boot the executor re-drives a
-`Running` job and `ReconcilePool` re-evaluates each member by reading its *live*
-Talos version (already-at-target → `Done`), which is what makes re-running
-idempotent. The persisted `state` field is **progress/observability** — the
-reconciler does not branch on it. (The narrative in `rollout-controller.md` §4
-describes re-entering "at the recorded point"; the shipped code achieves the
-same resume property via the version check instead. Code is authoritative.)
+**Resume re-enters at the recorded point, with version re-derivation as the
+floor.** On boot the executor re-drives a `Running` job and `ReconcilePool`
+evaluates each member:
+
+- If the member's recorded `state` is `Upgrading` or `WaitingHealthy`, it
+  **re-enters `finishUpgrade`** (wait-healthy → uncordon → `Done`) — *without*
+  re-snapshotting, re-draining, or re-issuing the upgrade. This is the
+  resume-after-reboot path (`rollout-controller.md` §4): a node may be mid-reboot
+  and *unreachable*, so the reconciler must wait, not read-its-version-and-fail.
+- Otherwise it reads the member's *live* Talos version (already-at-target →
+  `Done`; else drain → upgrade), which keeps a fresh pass idempotent.
+
+So the persisted `state` is consulted only to decide *whether a member is
+mid-flight*; convergence itself is still confirmed against the live version.
+Confirmed by `TestResumesMidFlightNode` (a `WaitingHealthy` control-plane node
+resumes to `Done` with zero snapshot/drain/upgrade calls).
 
 ## Invariants
 
@@ -78,6 +87,7 @@ same resume property via the version check instead. Code is authoritative.)
 | I6 | **The first node that fails to drain/upgrade/become healthy halts the entire rollout.** | `fail` (sets `Failed`, returns an error) → `ReconcilePool` returns it → the job goes `Failed` | Prevents a bad image marching across the fleet — the core difference from a `for` loop of `talosctl upgrade` (`rollout-controller.md` §3). |
 | I7 | **Cluster-unreachable mid-reboot is parked, not failed.** | `waitHealthy` (treats `NodeReady`/`Version` errors as not-ready-yet until `WaitTimeout`) | The control-plane apiserver legitimately disappears during its own reboot; that is expected, not an error (`rollout-controller.md` §4). |
 | I8 | **Re-issuing an upgrade on an already-upgraded node is a no-op.** | `ReconcilePool` (version check precedes any mutation) | Makes restart/resume idempotent. |
+| I8b | **A node recorded mid-flight (`Upgrading`/`WaitingHealthy`) resumes into the wait, not into a version read.** | `ReconcilePool` (recorded-state switch → `finishUpgrade`, before any `Version` call) | A mid-reboot node is unreachable; reading its version would error and wrongly halt the rollout. This is what makes a Medea restart *during* a control-plane reboot safe (`TestResumesMidFlightNode`; PRD App. B). |
 | I9 | **Progression stops at a safe point when the pool is paused** (between nodes, never mid-node). | `ReconcilePool` (returns early if `NodePool.paused`); the in-flight node finishes its transition first | Pause/abort must never leave a node half-upgraded (`rollout-controller.md` §3, `rollout-safety.md` §3 #5). |
 
 ## Command surface
