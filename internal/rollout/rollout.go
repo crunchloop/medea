@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	pb "github.com/bilby91/medea/gen/medea/v1"
@@ -128,6 +129,81 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 		}
 	}
 	return nil
+}
+
+// ReconcileK8s drives the cluster-wide Kubernetes upgrade (rollout-controller.md
+// §2.2): take a mandatory etcd snapshot (the K8s upgrade touches control-plane
+// components — the only undo on non-HA), then trigger Talos's upgrade-k8s and
+// verify convergence. Talos orchestrates the disruption itself (control-plane
+// static pods + kubelets); Medea triggers it and confirms every node reached the
+// target. Progress is tracked in the cluster's ClusterRollout record.
+func (r *Reconciler) ReconcileK8s(ctx context.Context, cluster, target string, k8s K8sOps) error {
+	if target == "" {
+		return fmt.Errorf("rollout: no target Kubernetes version for %s", cluster)
+	}
+	r.setClusterPhase(cluster, pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_UPGRADING, target, "upgrading")
+
+	nodes, err := r.kube.ListNodes(ctx)
+	if err != nil {
+		return r.failCluster(cluster, target, fmt.Sprintf("list nodes: %v", err))
+	}
+	var cpIP, from string
+	for _, n := range nodes {
+		if n.Role == "controlplane" {
+			cpIP, from = n.InternalIP, n.KubeletVersion
+		}
+	}
+	if cpIP == "" {
+		return r.failCluster(cluster, target, "no control-plane node found")
+	}
+	if sameVersion(from, target) {
+		// Already converged — nothing to do.
+		r.setClusterPhase(cluster, pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_IDLE, target, "")
+		return nil
+	}
+
+	// Snapshot etcd before mutating the control plane — mandatory; failure aborts
+	// before any upgrade (rollout-safety.md §4, talos-client.md §5).
+	if err := r.snapshot(ctx, cluster, cpIP); err != nil {
+		return r.failCluster(cluster, target, fmt.Sprintf("etcd snapshot: %v", err))
+	}
+
+	// Talos-orchestrated upgrade; blocks to completion.
+	if err := k8s.UpgradeK8s(ctx, from, target); err != nil {
+		return r.failCluster(cluster, target, fmt.Sprintf("upgrade-k8s: %v", err))
+	}
+
+	// Verify every node converged to the target kubelet version.
+	nodes, err = r.kube.ListNodes(ctx)
+	if err != nil {
+		return r.failCluster(cluster, target, fmt.Sprintf("post-upgrade list nodes: %v", err))
+	}
+	for _, n := range nodes {
+		if !sameVersion(n.KubeletVersion, target) {
+			return r.failCluster(cluster, target, fmt.Sprintf("node %s at %s, want %s", n.Name, n.KubeletVersion, target))
+		}
+	}
+
+	r.setClusterPhase(cluster, pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_IDLE, target, "")
+	return nil
+}
+
+func (r *Reconciler) setClusterPhase(cluster string, phase pb.ClusterRolloutPhase, target, msg string) {
+	_ = r.store.PutClusterRollout(&pb.ClusterRollout{
+		Cluster: cluster, Phase: phase, TargetKubernetesVersion: target, Message: msg,
+	})
+}
+
+// failCluster marks the cluster's K8s rollout Failed and returns a halting error.
+func (r *Reconciler) failCluster(cluster, target, msg string) error {
+	r.setClusterPhase(cluster, pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_FAILED, target, msg)
+	return fmt.Errorf("k8s rollout halted: %s", msg)
+}
+
+// sameVersion compares Kubernetes versions ignoring a leading "v" (kubelet
+// reports "v1.36.2"; a target may be given either way).
+func sameVersion(a, b string) bool {
+	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
 }
 
 // upgradeNode runs one node through the OS-path state machine.

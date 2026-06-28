@@ -261,6 +261,50 @@ func TestCreateRolloutUnknownClusterAndEmptyTarget(t *testing.T) {
 	}
 }
 
+func TestEnableThenCreateK8sRollout(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1")
+
+	if _, err := c.EnableRollouts(ctx, &pb.EnableRolloutsRequest{Cluster: "home"}); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+
+	job, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "home", Kind: pb.RolloutKind_ROLLOUT_KIND_KUBERNETES,
+		TargetVersion: "v1.36.2", CreatedBy: "tester",
+	})
+	if err != nil {
+		t.Fatalf("create k8s rollout: %v", err)
+	}
+	if job.GetKind() != pb.RolloutKind_ROLLOUT_KIND_KUBERNETES || job.GetPool() != "" {
+		t.Fatalf("k8s job should be cluster-wide: %+v", job)
+	}
+	if job.GetState() != pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING || job.GetTargetVersion() != "v1.36.2" {
+		t.Fatalf("job wrong: %+v", job)
+	}
+	// desired cluster k8s version was set to the target.
+	cl, err := c.GetCluster(ctx, &pb.GetClusterRequest{Cluster: "home"})
+	if err != nil || cl.GetDesired().GetKubernetesVersion() != "v1.36.2" {
+		t.Fatalf("desired k8s not set: %v / %+v", err, cl.GetDesired())
+	}
+}
+
+// A Kubernetes rollout is cluster-wide; supplying a pool is rejected.
+func TestCreateK8sRolloutRejectsPool(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1")
+	if _, err := c.EnableRollouts(ctx, &pb.EnableRolloutsRequest{Cluster: "home"}); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if _, err := c.CreateRollout(ctx, &pb.CreateRolloutRequest{
+		Cluster: "home", Pool: "workers", Kind: pb.RolloutKind_ROLLOUT_KIND_KUBERNETES, TargetVersion: "v1.36.2",
+	}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("k8s with pool: code=%v, want InvalidArgument", status.Code(err))
+	}
+}
+
 func TestWatchSnapshotThenLive(t *testing.T) {
 	c, st := newClient(t, serverToken)
 	seedCluster(t, st, "home", "v1.36.1") // revision 1

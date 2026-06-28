@@ -89,7 +89,7 @@ are shared infrastructure.
 
 | Context | Type | Modules (packages) | Aggregates / responsibility |
 | --- | --- | --- | --- |
-| **Version Rollout** | **Core domain** | [`rollout`](internal/rollout); the rollout/safety handlers in [`server`](internal/server) (`CreateRollout`, `EnableRollouts`, `DisableRollouts`, `PauseRollout`, `ResumeRollout`, `ListRollouts`, `GetRollout`) | `Rollout` (job), `MachineRollout` (per-node execution), `ClusterRollout` (K8s phase, deferred). The reason Medea exists: safe, observable version rollouts with the safety model baked in. |
+| **Version Rollout** | **Core domain** | [`rollout`](internal/rollout); the rollout/safety handlers in [`server`](internal/server) (`CreateRollout`, `EnableRollouts`, `DisableRollouts`, `PauseRollout`, `ResumeRollout`, `ListRollouts`, `GetRollout`) | `Rollout` (job), `MachineRollout` (per-node execution), `ClusterRollout` (K8s-upgrade phase). The reason Medea exists: safe, observable version rollouts with the safety model baked in. |
 | **Cluster Inventory** | Supporting | [`seed`](internal/seed), [`refresh`](internal/refresh); the inventory handlers in [`server`](internal/server) (`GetCluster`, `ListClusters`, `ListNodePools`, `ListMachines`, `SetClusterVersions`, `SetNodePoolVersion`) | `Cluster`, `NodePool`, `Machine`. The registry of what clusters/pools/nodes exist, their desired versions, and their observed reality. Seeding bootstraps it; refresh projects observed onto it. |
 | **Persistence + Shared Kernel** | Generic / kernel | [`store`](internal/store) (impl); [`gen/medea/v1`](gen/medea/v1) (kernel types) | The repository, optimistic concurrency, desired-state export, and the domain-event broadcaster. The proto types are the shared kernel every context speaks. |
 | **Talos Integration** | Generic subdomain | [`talos`](internal/talos) | ACL over Talos `machinery` (`Version`, `UpgradeOS`, `EtcdSnapshot`) + installer-image/schematic derivation. *Note:* `DeriveInstallerImage` (preserve-schematic, bump-version) is genuine domain logic that lives here for cohesion (`design/talos-client.md` §3). |
@@ -130,7 +130,7 @@ docs.
 | **Observed state** | The current reality (versions, health, readiness) re-read from the live cluster. A rebuildable in-memory cache, never persisted, never trusted as truth. |
 | **Rollout (job)** | The explicit, audited `Rollout` record that *authorizes and tracks* an upgrade. In manual mode, nothing upgrades without one. See `design/aggregates/rollout.md`. |
 | **MachineRollout** | The per-node execution **progress/state machine** of an OS upgrade (`Idle→Draining→Upgrading→WaitingHealthy→Done/Failed`). Persisted so a rollout resumes after a restart/reboot. |
-| **ClusterRollout** | The cluster-wide K8s-upgrade **phase** (`Idle→Upgrading→Idle/Failed`). The K8s path is deferred (M3); currently returns `Unimplemented`. |
+| **ClusterRollout** | The cluster-wide K8s-upgrade **phase** (`Idle→Upgrading→Idle/Failed`). Driven by `ReconcileK8s` via the imported Talos `upgrade-k8s`; snapshot-before-K8s is mandatory. |
 | **Rollout strategy** | `maxUnavailable`, `drainTimeout`, `haltOnFailure`, `snapshotBeforeControlPlane` — the per-pool safety knobs. |
 | **maxUnavailable** | OS path: how many pool members may be not-Ready at once. v1 processes one node at a time, satisfying any value ≥ 1. |
 | **Drain** | Cordon + evict pods, PDB-respecting, **no force**. A drain timeout *halts* the rollout (surfaces the blocking pod) rather than evicting. |
@@ -155,7 +155,7 @@ Read this before assuming what a name means — several words are overloaded.
 - **"Rollout" means four different things.** Disambiguate every time:
   1. `pb.Rollout` — the **job** (authorization + audit + overall job state).
   2. `pb.MachineRollout` — **per-node execution progress** (the OS state machine).
-  3. `pb.ClusterRollout` — **cluster K8s-upgrade phase** (deferred).
+  3. `pb.ClusterRollout` — **cluster K8s-upgrade phase**.
   4. "a rollout" in prose — the *act* of upgrading a pool/cluster.
 - **Four different "state-ish" enums — do not conflate:**
   - `ClusterMode` (`manual`/`auto`) — *how* rollouts trigger.
@@ -196,7 +196,7 @@ surfaced over the wire as `WatchEvent`). They notify; consumers re-fetch.
 | `nodepool` | A `NodePool` desired record is written (versions, `paused`) | Cluster Inventory (API) |
 | `machine` | A `Machine` identity record is written (seeding) | Cluster Inventory (seed) |
 | `machine_rollout` | A node's `MachineRollout` progress transitions | Version Rollout (reconciler) |
-| `cluster_rollout` | A `ClusterRollout` phase transitions (K8s path, deferred) | Version Rollout (reconciler) |
+| `cluster_rollout` | A `ClusterRollout` phase transitions (K8s path) | Version Rollout (reconciler) |
 | `rollout_job` | A `Rollout` job is created or changes state | Version Rollout (API + executor) |
 
 Consumers: the gRPC `Watch` stream (CLI `rollout status -w`, future UI) and

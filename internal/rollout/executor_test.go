@@ -117,3 +117,69 @@ func TestExecutorMarksJobFailed(t *testing.T) {
 		t.Fatal("failed job has no message")
 	}
 }
+
+func TestExecutorRunsK8sJob(t *testing.T) {
+	st := execStore(t)
+	if _, err := st.PutClusterDesired(&pb.Cluster{Name: "home", RolloutsEnabled: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutRolloutJob(&pb.Rollout{
+		Cluster: "home", Pool: "", Kind: pb.RolloutKind_ROLLOUT_KIND_KUBERNETES,
+		TargetVersion: "v1.36.2", State: pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	fk := &fakeKube{nodes: []kube.NodeInfo{
+		{Name: "cp1", InternalIP: "10.0.0.2", Role: "controlplane", Ready: true, KubeletVersion: "v1.36.1"},
+		{Name: "w1", InternalIP: "10.0.0.3", Role: "worker", Ready: true, KubeletVersion: "v1.36.1"},
+	}}
+	ft := &fakeTalos{versions: map[string]string{}}
+	fk8 := &fakeK8s{kube: fk}
+	factory := func(context.Context, *pb.Cluster) (TalosOps, KubeOps, func(), error) { return ft, fk, func() {}, nil }
+	k8sFactory := func(context.Context, *pb.Cluster) (K8sOps, func(), error) { return fk8, func() {}, nil }
+
+	e := NewExecutor(st, factory, t.TempDir(), time.Minute).WithK8sFactory(k8sFactory)
+	if err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	job, _ := st.GetRolloutJob("home", "")
+	if job.GetState() != pb.RolloutJobState_ROLLOUT_JOB_STATE_DONE {
+		t.Fatalf("job state = %v, want DONE", job.GetState())
+	}
+	if len(fk8.calls) != 1 {
+		t.Fatalf("upgrade-k8s not called: %v", fk8.calls)
+	}
+	cr, _ := st.GetClusterRollout("home")
+	if cr.GetPhase() != pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_IDLE {
+		t.Fatalf("cluster rollout phase = %v, want IDLE", cr.GetPhase())
+	}
+}
+
+// Without a K8s upgrader wired (the default), a KUBERNETES job is refused rather
+// than silently skipped — defense against a half-enabled K8s path.
+func TestExecutorRefusesK8sWithoutUpgrader(t *testing.T) {
+	st := execStore(t)
+	if _, err := st.PutClusterDesired(&pb.Cluster{Name: "home", RolloutsEnabled: true}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutRolloutJob(&pb.Rollout{
+		Cluster: "home", Kind: pb.RolloutKind_ROLLOUT_KIND_KUBERNETES,
+		TargetVersion: "v1.36.2", State: pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	factory := func(context.Context, *pb.Cluster) (TalosOps, KubeOps, func(), error) {
+		return &fakeTalos{versions: map[string]string{}}, &fakeKube{}, func() {}, nil
+	}
+	e := NewExecutor(st, factory, t.TempDir(), time.Minute) // no WithK8sFactory
+
+	if err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	job, _ := st.GetRolloutJob("home", "")
+	if job.GetState() != pb.RolloutJobState_ROLLOUT_JOB_STATE_FAILED {
+		t.Fatalf("job state = %v, want FAILED", job.GetState())
+	}
+}

@@ -23,8 +23,26 @@ import (
 	"github.com/bilby91/medea/internal/rollout"
 	"github.com/bilby91/medea/internal/server"
 	"github.com/bilby91/medea/internal/store"
+	"github.com/bilby91/medea/internal/talos/k8supgrade"
 	"github.com/bilby91/medea/internal/tlsgen"
 )
+
+// k8sUpgraderFactory builds the per-cluster Kubernetes upgrader from creds. It
+// lives at the composition root so the heavy, version-coupled k8supgrade import
+// (the Talos main module) stays out of internal/rollout (talos-client.md §4).
+func k8sUpgraderFactory(cs creds.Store) rollout.K8sFactory {
+	return func(_ context.Context, cl *pb.Cluster) (rollout.K8sOps, func(), error) {
+		tb, err := cs.TalosConfig(cl.GetName())
+		if err != nil {
+			return nil, nil, err
+		}
+		up, err := k8supgrade.New(tb, cl.GetEndpoints().GetTalos())
+		if err != nil {
+			return nil, nil, err
+		}
+		return up, func() {}, nil
+	}
+}
 
 var (
 	serveListen      string
@@ -115,7 +133,9 @@ func runServe(_ *cobra.Command, _ []string) error {
 	// Rollout executor: global gate, default off. Even when on, per-cluster
 	// rollouts-enabled is still required (rollout-safety.md §3).
 	if serveRollouts {
-		go rollout.NewExecutor(st, rollout.CredsFactory(cs), serveSnapshotDir, serveRolloutIntv).Run(ctx)
+		go rollout.NewExecutor(st, rollout.CredsFactory(cs), serveSnapshotDir, serveRolloutIntv).
+			WithK8sFactory(k8sUpgraderFactory(cs)).
+			Run(ctx)
 		fmt.Fprintln(os.Stderr, "medea: rollout executor ENABLED (per-cluster rollouts-enabled still required)")
 	} else {
 		fmt.Fprintln(os.Stderr, "medea: rollout executor disabled (pass --rollouts to enable)")

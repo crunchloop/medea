@@ -293,7 +293,7 @@ func (s *Server) CreateRollout(_ context.Context, req *pb.CreateRolloutRequest) 
 	case pb.RolloutKind_ROLLOUT_KIND_TALOS:
 		return s.createTalosRollout(req)
 	case pb.RolloutKind_ROLLOUT_KIND_KUBERNETES:
-		return nil, status.Error(codes.Unimplemented, "kubernetes rollouts land in M3")
+		return s.createKubernetesRollout(req)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "kind must be TALOS or KUBERNETES")
 	}
@@ -344,6 +344,64 @@ func (s *Server) createTalosRollout(req *pb.CreateRolloutRequest) (*pb.Rollout, 
 		return nil, mapErr(err)
 	}
 	saved, err := s.store.GetRolloutJob(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return saved, nil
+}
+
+// createKubernetesRollout authorizes a cluster-wide Kubernetes upgrade. K8s
+// upgrades are orchestrated by Talos itself (not node-by-node), so they are
+// cluster-scoped: the pool must be empty. Guards (cluster exists, enabled,
+// manual mode, valid target) are enforced by the caller (CreateRollout).
+func (s *Server) createKubernetesRollout(req *pb.CreateRolloutRequest) (*pb.Rollout, error) {
+	if req.GetPool() != "" {
+		return nil, status.Error(codes.InvalidArgument, "kubernetes rollouts are cluster-wide; omit pool")
+	}
+
+	// Set desired = target (so the reconciler converges to it), guarded above.
+	if _, err := rmw(func() (store.Revision, error) {
+		c, rev, err := s.store.GetCluster(req.GetCluster())
+		if err != nil {
+			return 0, err
+		}
+		if c == nil {
+			return 0, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+		}
+		if c.Desired == nil {
+			c.Desired = &pb.ClusterDesired{}
+		}
+		c.Desired.KubernetesVersion = req.GetTargetVersion()
+		return s.store.PutClusterDesired(c, rev)
+	}, 0); err != nil {
+		return nil, err
+	}
+
+	// Planned targets = all cluster machines (informational; Talos upgrades the
+	// whole cluster). Captured at plan time so the recorded scope can't expand.
+	machines, err := s.store.ListMachines(req.GetCluster(), "")
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	targets := make([]string, 0, len(machines))
+	for _, m := range machines {
+		targets = append(targets, m.GetTalosEndpoint())
+	}
+
+	job := &pb.Rollout{
+		Cluster:        req.GetCluster(),
+		Pool:           "", // cluster-wide
+		Kind:           pb.RolloutKind_ROLLOUT_KIND_KUBERNETES,
+		TargetVersion:  req.GetTargetVersion(),
+		State:          pb.RolloutJobState_ROLLOUT_JOB_STATE_PENDING,
+		CreatedBy:      req.GetCreatedBy(),
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		PlannedTargets: targets,
+	}
+	if err := s.store.PutRolloutJob(job); err != nil {
+		return nil, mapErr(err)
+	}
+	saved, err := s.store.GetRolloutJob(req.GetCluster(), "")
 	if err != nil {
 		return nil, mapErr(err)
 	}
