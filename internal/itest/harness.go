@@ -33,10 +33,30 @@ type Cluster struct {
 	Kubeconfig      []byte
 }
 
-// Start brings up a single-control-plane, single-worker docker Talos cluster,
-// waits for it to be healthy, and registers teardown via t.Cleanup. If docker
-// or talosctl is unavailable the test is skipped (so CI without them is green).
+// Options tunes the scratch cluster. The zero value matches Start (talosctl
+// defaults). All fields are optional.
+type Options struct {
+	// K8sVersion pins the cluster's initial Kubernetes version (e.g. "v1.36.1"),
+	// so a test can upgrade from a known lower patch. "" = talosctl default.
+	K8sVersion string
+	// TalosImage pins the Talos container image (e.g.
+	// "ghcr.io/siderolabs/talos:v1.13.5"), to match the imported main-module
+	// version. "" = talosctl default.
+	TalosImage string
+}
+
+// Start brings up a single-control-plane, single-worker docker Talos cluster
+// with talosctl defaults. See StartWith for tuning.
 func Start(t *testing.T) *Cluster {
+	t.Helper()
+	return StartWith(t, Options{})
+}
+
+// StartWith brings up a single-control-plane, single-worker docker Talos
+// cluster per opts, waits for it to be healthy, and registers teardown via
+// t.Cleanup. If docker or talosctl is unavailable the test is skipped (so CI
+// without them is green).
+func StartWith(t *testing.T, opts Options) *Cluster {
 	t.Helper()
 	requireBin(t, "talosctl")
 	requireBin(t, "docker")
@@ -46,18 +66,32 @@ func Start(t *testing.T) *Cluster {
 	talosCfg := filepath.Join(dir, "talosconfig")
 	kubeCfg := filepath.Join(dir, "kubeconfig")
 
+	// Keep cluster state under the test's temp dir (not the default
+	// ~/.talos/clusters) so runs are hermetic and don't depend on that dir's
+	// ownership — a prior `sudo` run (e.g. the QEMU validation) can leave it
+	// root-owned and unwritable.
+	stateDir := filepath.Join(dir, "state")
+
 	// Destroy first in case a previous run leaked, then create. talosctl v1.13
 	// uses the `cluster create docker` subcommand (the old --provisioner flag is
 	// gone); the docker provisioner is always 1 control plane and waits for the
 	// cluster to be healthy before returning (no --wait flag).
-	_ = runQuiet(10*time.Minute, "talosctl", "cluster", "destroy", "--name", name)
-	run(t, 12*time.Minute, "talosctl", "cluster", "create", "docker",
+	_ = runQuiet(10*time.Minute, "talosctl", "cluster", "destroy", "--name", name, "--state", stateDir)
+	args := []string{"cluster", "create", "docker",
 		"--name", name,
 		"--workers", "1",
 		"--talosconfig-destination", talosCfg,
-	)
+		"--state", stateDir,
+	}
+	if opts.K8sVersion != "" {
+		args = append(args, "--kubernetes-version", opts.K8sVersion)
+	}
+	if opts.TalosImage != "" {
+		args = append(args, "--image", opts.TalosImage)
+	}
+	run(t, 12*time.Minute, "talosctl", args...)
 	t.Cleanup(func() {
-		_ = runQuiet(5*time.Minute, "talosctl", "cluster", "destroy", "--name", name)
+		_ = runQuiet(5*time.Minute, "talosctl", "cluster", "destroy", "--name", name, "--state", stateDir)
 	})
 
 	tb, err := os.ReadFile(talosCfg)

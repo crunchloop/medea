@@ -1,9 +1,10 @@
 # Aggregate: ClusterRollout (Kubernetes-path phase)
 
 **Context:** Version Rollout (core domain) · **Type:** aggregate (reconciler-owned) ·
-**Status:** **Deferred (M3)** — the type and storage exist; no reconciler drives
-it yet, and the Kubernetes rollout path is refused at both the API and the
-executor.
+**Status:** **M3 in progress** — the `upgrade-k8s` primitive is implemented and
+integration-tested behind the `K8sUpgrader` seam, but no reconciler drives this
+record yet and the Kubernetes rollout path is still refused at both the API and
+the executor (the remaining wiring; see "Current behavior").
 
 `ClusterRollout` tracks the **cluster-wide Kubernetes upgrade phase**. Unlike the
 OS path (which Medea drives node-by-node via [`MachineRollout`](machine-rollout.md)),
@@ -27,14 +28,21 @@ will live. It is documented now so the seam is visible; it is **not** live code.
   ("kubernetes rollouts not supported in v1").
 - So no `ClusterRollout` record is ever written today; `GetRollout` returns it as
   nil.
-- **The quarantine seam is scaffolded** (I3): the `talos.K8sUpgrader` interface
-  ([`internal/talos`](../../internal/talos)) and its implementing package
-  [`internal/talos/k8supgrade`](../../internal/talos/k8supgrade) exist;
-  `k8supgrade.Upgrader.UpgradeK8s` currently returns `ErrNotImplemented`. The
-  integration-test slot (`internal/itest/k8s_upgrade_integration_test.go`) is in
-  place and `t.Skip`-gated until the impl lands. No main-module dependency is
-  imported yet — that arrives with the M3 implementation, pinned to a supported
-  Talos release.
+- **The quarantine seam is implemented and validated** (I2, I3): the
+  `talos.K8sUpgrader` interface ([`internal/talos`](../../internal/talos)) and
+  its implementing package
+  [`internal/talos/k8supgrade`](../../internal/talos/k8supgrade) drive Talos's
+  main-module `upgrade-k8s` (the only place importing the Talos main module +
+  go-kubernetes). `TestK8sUpgrade`
+  (`internal/itest/k8s_upgrade_integration_test.go`) exercises a real
+  v1.36.1→v1.36.2 upgrade on a docker Talos cluster to convergence.
+- **What is still missing (the remaining M3 wiring):** the reconciler/executor
+  do not yet *call* `UpgradeK8s`, and `CreateRollout` still refuses
+  `KUBERNETES`. So although the upgrade primitive works, no `Rollout` job can
+  trigger it and no `ClusterRollout` record is written yet. Wiring it (lift the
+  refusals, drive the upgrader, write/track `ClusterRollout`, add the
+  snapshot-before gate per I1, re-apply the safety guards per I4) is the next
+  step.
 
 ## Consistency boundary (planned)
 

@@ -5,9 +5,20 @@ package itest
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bilby91/medea/internal/kube"
 	"github.com/bilby91/medea/internal/talos/k8supgrade"
+)
+
+// k8s upgrade path versions: boot the scratch cluster one patch below the
+// release default and upgrade up to it. Both are real published k8s patches and
+// "1.36->1.36" is a supported Talos upgrade path. The Talos image is pinned to
+// match the imported main-module version (machinery + k8supgrade are v1.13.5).
+const (
+	k8sFrom    = "v1.36.1"
+	k8sTo      = "v1.36.2"
+	talosImage = "ghcr.io/siderolabs/talos:v1.13.5"
 )
 
 // TestK8sUpgrade validates the Kubernetes upgrade path (upgrade-k8s) against a
@@ -17,16 +28,8 @@ import (
 // control-plane manifests and rolls kubelets with no node reboot, so the docker
 // provisioner exercises the real orchestration faithfully. This is also where
 // the version-coupled k8supgrade main-module import is validated.
-//
-// SKIPPED until the M3 upstream wiring lands: k8supgrade.UpgradeK8s currently
-// returns ErrNotImplemented. The harness slot and the convergence assertions
-// exist now so turning the test on is a small change once the impl is real.
-// To enable: implement internal/talos/k8supgrade, pick a real `to` patch the
-// pinned Talos release supports, and delete the t.Skip below.
 func TestK8sUpgrade(t *testing.T) {
-	t.Skip("k8s upgrade path not implemented yet (M3); see internal/talos/k8supgrade")
-
-	c := Start(t)
+	c := StartWith(t, Options{K8sVersion: k8sFrom, TalosImage: talosImage})
 	ctx := context.Background()
 
 	kc, err := kube.New(c.Kubeconfig)
@@ -42,10 +45,12 @@ func TestK8sUpgrade(t *testing.T) {
 		t.Fatal("no nodes in scratch cluster")
 	}
 
-	// Current cluster Kubernetes version (from a node's kubelet).
-	from := nodes[0].KubeletVersion
-	// TODO(M3): choose the next k8s patch the pinned Talos release supports.
-	to := from
+	// Sanity: the cluster booted at the expected lower patch.
+	for _, n := range nodes {
+		if n.KubeletVersion != k8sFrom {
+			t.Fatalf("node %s booted at %s, expected %s", n.Name, n.KubeletVersion, k8sFrom)
+		}
+	}
 
 	// Build the quarantined upgrader from the scratch cluster's creds + the
 	// control-plane node IP (the harness helper used elsewhere).
@@ -56,22 +61,33 @@ func TestK8sUpgrade(t *testing.T) {
 	}
 
 	// Trigger the Talos-orchestrated upgrade (blocks until Talos reports done).
-	if err := up.UpgradeK8s(ctx, from, to); err != nil {
-		t.Fatalf("UpgradeK8s(%s -> %s): %v", from, to, err)
+	t.Logf("upgrading kubernetes %s -> %s", k8sFrom, k8sTo)
+	if err := up.UpgradeK8s(ctx, k8sFrom, k8sTo); err != nil {
+		t.Fatalf("UpgradeK8s(%s -> %s): %v", k8sFrom, k8sTo, err)
 	}
 
 	// Monitor-to-completion: Talos drives the upgrade; we observe convergence by
-	// polling kubelet versions until every node reports `to`.
-	// TODO(M3): wrap this in a bounded poll loop that treats transient
-	// control-plane blips as not-yet-converged (park-and-retry), like the OS
-	// path's waitHealthy.
-	for _, n := range nodes {
-		v, err := kc.KubeletVersion(ctx, n.Name)
-		if err != nil {
-			t.Fatalf("kubelet version %s: %v", n.Name, err)
+	// polling kubelet versions until every node reports the target. Transient
+	// control-plane blips during the control-plane component roll are treated as
+	// not-yet-converged (park-and-retry), like the OS path's waitHealthy.
+	deadline := time.Now().Add(8 * time.Minute)
+	for {
+		converged := true
+		for _, n := range nodes {
+			v, err := kc.KubeletVersion(ctx, n.Name)
+			if err != nil || v != k8sTo {
+				converged = false
+				t.Logf("waiting: node %s at %q (err=%v), want %s", n.Name, v, err, k8sTo)
+				break
+			}
 		}
-		if v != to {
-			t.Fatalf("node %s at %s, want %s", n.Name, v, to)
+		if converged {
+			t.Logf("all %d nodes converged to %s", len(nodes), k8sTo)
+			return
 		}
+		if time.Now().After(deadline) {
+			t.Fatalf("nodes did not converge to %s before deadline", k8sTo)
+		}
+		time.Sleep(10 * time.Second)
 	}
 }
