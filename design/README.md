@@ -22,6 +22,7 @@ reasoning stays useful after the work ships.
 | [`talos-client.md`](talos-client.md) | Talos & kube clients (no shelling): small Medea interfaces over the `machinery` client (OS upgrade/snapshot/health/version) + client-go (readiness/drain); the quarantined main-module `upgrade-k8s`; installer-image/schematic derivation. |
 | [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. (Trigger in §1 superseded by `rollout-safety.md`.) |
 | [`rollout-safety.md`](rollout-safety.md) | How rollouts are triggered + the guards making accidental action impossible: per-cluster `mode` (manual default), `rolloutsEnabled` (default off), plan/confirm, boot safety. Reverses rollout-controller.md §1. |
+| [`provisioning-plane.md`](provisioning-plane.md) | **(v2, Draft for review)** Layer-0: the `Host` inventory aggregate + `NodePool` replicas/selector, the Matchbox driver, spec-based machine-config generation, Image-Factory schematic resolution, secrets capture, and the join-existing-cluster reconciler. Power-agnostic (the `Power` interface is a v4 seam). |
 
 These records are **decision-oriented** (why each subsystem looks the way it
 does). For the **domain lens** — bounded contexts and the strategic map, see
@@ -30,7 +31,12 @@ does). For the **domain lens** — bounded contexts and the strategic map, see
 
 Planned design records (to be written as work approaches):
 
-- `provisioning-plane.md` — (deferred) the Layer-0 hardware inventory + netboot/PXE/matchbox driver; how "I want a node" becomes a booted Beelink. Blocks the future provisioning milestone.
+- `backup.md` — (v3) the backup scheduler + restore flow (etcd snapshot
+  schedule/retention/destination, and the restore that control-plane auto-repair
+  needs). The v1 ad-hoc pre-mutation snapshot is its seed.
+- `auto-repair.md` — (v4) failure detection + the `Power` driver
+  (WoL/smart-plug/Redfish); reprovision a dead node. Builds on the provisioning
+  plane and restore.
 
 ## What's *not* here
 

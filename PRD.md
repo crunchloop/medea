@@ -1,8 +1,8 @@
 # PRD — `medea`: an external control plane for operating Talos clusters
 
-**Status:** Draft (Pass-1)
+**Status:** Draft (Pass-1); v1 implemented (M0–M4); v2 scoping (provisioning)
 **Author:** @bilby91
-**Date:** 2026-06-25 (initial draft); 2026-06-25 (Pass-1 — store, protocol, Talos-client, and state-model decisions resolved); 2026-06-26 (rollout-safety — explicit-job trigger, per-cluster mode + rolloutsEnabled)
+**Date:** 2026-06-25 (initial draft); 2026-06-25 (Pass-1 — store, protocol, Talos-client, and state-model decisions resolved); 2026-06-26 (rollout-safety — explicit-job trigger, per-cluster mode + rolloutsEnabled); 2026-06-28 (v2 scoping — provisioning plane promoted from deferred; pillar sequencing v2→v3→v4)
 **Repo:** built in-place under `medea/` in `github.com/bilby91/talos-cluster`, which converges into Medea over time (§13 #11). Go module path: `github.com/bilby91/medea` from day one.
 **Visibility:** private
 **License:** Apache-2.0 (to be committed day 1 of the extracted repo)
@@ -80,13 +80,26 @@ In scope:
 - **Talos API client** (config-read, upgrade, upgrade-k8s, etcd snapshot, health) and **kube-apiserver client** (cordon/drain/node status), both as outward clients.
 - **State seeding**: register the existing cluster + its nodes into the store from current talosconfig/kubeconfig (no provisioning).
 
-Deferred to a later version (architect for, don't ship):
+Deferred past v1 — now **scoped as v2–v4** in dependency order (2026-06-28; see
+§13 and §14):
 
-- **Provisioning plane** (netboot/PXE/matchbox driver + hardware inventory). The bridge from "I want a node" to a booted Beelink. Trigger to build: when we want `scale` or auto-repair.
-- **Auto-repair reconciler.** Trigger: provisioning exists.
-- **Backup scheduler + restore flow** as a first-class feature. (v1 still takes ad-hoc snapshots *before control-plane upgrades* — the scheduler/retention/restore UX is what's deferred.)
-- **Declarative `apply -f` input format**; web UI; multi-cluster.
-- **mTLS/OIDC auth** hardening (v1 may run on a trusted network with minimal auth — see §13).
+- **Provisioning plane (v2)** — Layer-0: a `Host` inventory aggregate +
+  `NodePool` replicas/selector, a Matchbox driver (absorbing `netboot/`),
+  spec-based machine-config generation, Image-Factory schematic resolution, and
+  a join-existing-cluster reconciler. v2 *adds nodes to an existing cluster*
+  (scale-out / replace); new-cluster creation stays deferred. Power-agnostic (the
+  `Power` interface is a v4 seam). Design: `design/provisioning-plane.md`.
+- **Backup scheduler + restore (v3)** — schedule/retention/destination for etcd
+  snapshots, and the restore flow (which control-plane auto-repair needs). The
+  v1 ad-hoc pre-mutation snapshot is its seed. Design: `design/backup.md` (planned).
+- **Auto-repair reconciler (v4)** — failure detection + the `Power` driver
+  (WoL/smart-plug/Redfish); reprovision a dead node. Builds on v2 + v3. Design:
+  `design/auto-repair.md` (planned).
+
+Still deferred (no version yet):
+
+- **Declarative `apply -f` input format**; web UI; multi-cluster fleet UI.
+- **mTLS/OIDC auth** hardening (v1 runs with a bearer token over TLS — see §13).
 
 ## 7. Public API sketch
 
@@ -313,6 +326,17 @@ Resolved during rollout-safety review (2026-06-26):
 17. **`rolloutsEnabled` per cluster, default off.** Never set by seed; enforced at job creation *and* execution. The hard guard that makes the live production cluster un-rollout-able by accident — it is simply never enabled.
 18. **Control-plane: no extra confirmation gate**, but snapshot-before-control-plane stays mandatory. Plan-then-`--confirm` applies to all pools.
 
+Resolved during v2 scoping (2026-06-28) — full detail in `design/provisioning-plane.md`:
+
+19. **Pillar sequencing: Provisioning (v2) → Backup/Restore (v3) → Auto-repair (v4).** Dependency order; each independently shippable. Restore precedes repair because control-plane repair needs it.
+20. **Provisioning drives Matchbox.** Medea owns Matchbox profiles/groups + rendered machine configs and orchestrates the existing dnsmasq/TFTP iPXE chainload (absorbs `netboot/`, decision #11). Rejected: Medea-as-boot-server; Sidero Metal (CRD/in-cluster, contra App. B).
+21. **Inventory = a MAC-keyed `Host` aggregate; `NodePool` gains `replicas` + `selector`; membership becomes reconciler-managed.** The CAPI/Metal3/Sidero shape, minus the BMC assumption.
+22. **v2 scope = add nodes to an existing cluster** (scale-out / replace), reusing the cluster's secrets. New-cluster / first-CP bootstrap deferred.
+23. **Medea generates machine config from a spec** (`Cluster`/`NodePool` spec + per-node patches) and is its source of truth.
+24. **Medea resolves schematics via the Image Factory API** (per-pool extension set → pinned schematic ID).
+25. **Medea owns the cluster machine-secrets bundle** — captured from the live cluster into the `CredentialStore`, used to mint join configs; never in bbolt, never exported.
+26. **Provisioning is power-agnostic.** Stage boot + wait (manual/WoL power-on); a `Power` interface is a v4 seam (Beelinks have no BMC).
+
 To be resolved (non-blocking — do not block M1/M2 code):
 
 10. **Where Medea runs / is deployed.** systemd unit on a small always-on box vs container vs operator workstation. Must be somewhere that is *not* the managed cluster. *Candidate: the netboot host on `10.0.0.0/24`.*
@@ -326,6 +350,22 @@ To be resolved (non-blocking — do not block M1/M2 code):
 - **M4 — Hardening.** Integration tests (Talos-in-docker), auth, deployment artifact (systemd/container), docs. ~1 wk.
 
 Total: ~5–6 calendar weeks for v1, depending on how much the K8s-path and CP-reboot resume edge cases bite.
+
+**v1 status (2026-06-28):** M0–M4 implemented. Both upgrade paths and the safety
+model are tested (unit `-race`, docker integration, QEMU worker + control-plane).
+
+### v2+ (post-v1 pillars, 2026-06-28 scoping)
+
+Sequenced by dependency (§13 #19). Detail in the per-pillar design records.
+
+- **v2 — Provisioning plane** (`design/provisioning-plane.md`). Add nodes to an
+  existing cluster: `Host` inventory + `NodePool` replicas/selector (v2-M1),
+  Matchbox driver + spec-based config/schematic generation (v2-M2), the
+  join-existing reconciler (v2-M3), scale-in/replacement + hardening (v2-M4).
+- **v3 — Backup + restore** (`design/backup.md`, planned). Snapshot
+  schedule/retention/destination; the restore flow control-plane repair depends on.
+- **v4 — Auto-repair** (`design/auto-repair.md`, planned). Failure detection + a
+  `Power` driver (WoL/smart-plug/Redfish); reprovision a dead node.
 
 ---
 
