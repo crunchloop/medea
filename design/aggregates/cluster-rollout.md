@@ -27,6 +27,14 @@ will live. It is documented now so the seam is visible; it is **not** live code.
   ("kubernetes rollouts not supported in v1").
 - So no `ClusterRollout` record is ever written today; `GetRollout` returns it as
   nil.
+- **The quarantine seam is scaffolded** (I3): the `talos.K8sUpgrader` interface
+  ([`internal/talos`](../../internal/talos)) and its implementing package
+  [`internal/talos/k8supgrade`](../../internal/talos/k8supgrade) exist;
+  `k8supgrade.Upgrader.UpgradeK8s` currently returns `ErrNotImplemented`. The
+  integration-test slot (`internal/itest/k8s_upgrade_integration_test.go`) is in
+  place and `t.Skip`-gated until the impl lands. No main-module dependency is
+  imported yet — that arrives with the M3 implementation, pinned to a supported
+  Talos release.
 
 ## Consistency boundary (planned)
 
