@@ -28,11 +28,15 @@ echo ">> creating QEMU cluster (sudo; downloads images + boots VMs, a few minute
 # install-then-reboot during bootstrap) — converges faster and is the right shape
 # for testing an A/B OS upgrade. (The default 'iso' preset installs first and can
 # time out bootstrap on macOS/QEMU.)
-# 4 GiB worker: the default 2 GiB is too tight for an in-place upgrade (pull
-# metal-installer, run it, A/B install, reboot) and the node OOMs / never returns.
+# Memory: the default 2 GiB is too tight for an in-place upgrade (pull
+# metal-installer, run it, A/B install, reboot) — the node OOMs and never
+# returns. Worker -> 4 GiB. The control-plane node carries etcd + apiserver +
+# controllers ON TOP of the upgrade, so it needs more headroom -> 6 GiB;
+# otherwise the control-plane upgrade hangs forever at "host is down".
 sudo talosctl cluster create qemu --name "$NAME" --workers 1 \
   --presets disk-image \
   --memory-workers 4096 \
+  --memory-controlplanes 6144 \
   --talosconfig-destination "$DIR/talosconfig"
 
 # Files written by root under sudo -> make them readable by us.
