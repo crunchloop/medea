@@ -21,6 +21,8 @@ import (
 	"github.com/bilby91/medea/internal/creds"
 	"github.com/bilby91/medea/internal/refresh"
 	"github.com/bilby91/medea/internal/rollout"
+	"github.com/bilby91/medea/internal/provision"
+	"github.com/bilby91/medea/internal/provision/matchbox"
 	"github.com/bilby91/medea/internal/server"
 	"github.com/bilby91/medea/internal/store"
 	"github.com/bilby91/medea/internal/talos/k8supgrade"
@@ -56,6 +58,13 @@ var (
 	serveRollouts    bool
 	serveSnapshotDir string
 	serveRolloutIntv time.Duration
+
+	serveProvisioning  bool
+	serveMatchboxDir   string
+	serveMatchboxURL   string
+	serveFactoryHost   string
+	serveInstallDisk   string
+	serveProvisionIntv time.Duration
 )
 
 func init() {
@@ -77,6 +86,12 @@ func init() {
 	f.BoolVar(&serveRollouts, "rollouts", false, "enable the rollout executor (global gate; default off). Per-cluster rollouts-enabled still required.")
 	f.StringVar(&serveSnapshotDir, "snapshot-dir", "medea-snapshots", "directory for pre-control-plane etcd snapshots")
 	f.DurationVar(&serveRolloutIntv, "rollout-interval", 15*time.Second, "how often the rollout executor checks for jobs")
+	f.BoolVar(&serveProvisioning, "provisioning", false, "enable the provisioning executor (global gate; default off). Per-cluster provisioning-enabled still required.")
+	f.StringVar(&serveMatchboxDir, "matchbox-dir", "", "Matchbox data directory (required with --provisioning)")
+	f.StringVar(&serveMatchboxURL, "matchbox-url", "", "Matchbox HTTP base URL nodes reach, e.g. http://host:8086 (required with --provisioning)")
+	f.StringVar(&serveFactoryHost, "factory-host", provision.DefaultFactoryHost, "Talos Image Factory host")
+	f.StringVar(&serveInstallDisk, "install-disk", "/dev/sda", "install disk for provisioned nodes")
+	f.DurationVar(&serveProvisionIntv, "provision-interval", 30*time.Second, "how often the provisioning executor reconciles")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -139,6 +154,24 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintln(os.Stderr, "medea: rollout executor ENABLED (per-cluster rollouts-enabled still required)")
 	} else {
 		fmt.Fprintln(os.Stderr, "medea: rollout executor disabled (pass --rollouts to enable)")
+	}
+
+	// Provisioning executor: global gate, default off. Per-cluster
+	// provisioning-enabled is still required (provisioning-plane.md §4).
+	if serveProvisioning {
+		if serveMatchboxDir == "" || serveMatchboxURL == "" {
+			return fmt.Errorf("--provisioning requires --matchbox-dir and --matchbox-url")
+		}
+		mb, err := matchbox.New(serveMatchboxDir, serveMatchboxURL)
+		if err != nil {
+			return fmt.Errorf("matchbox: %w", err)
+		}
+		go provision.NewExecutor(st, mb, provision.NewFactoryClient(serveFactoryHost),
+			provision.CredsKubeFactory(cs), provision.CredsSecretsFunc(cs),
+			serveFactoryHost, serveInstallDisk, serveProvisionIntv).Run(ctx)
+		fmt.Fprintln(os.Stderr, "medea: provisioning executor ENABLED (per-cluster provisioning-enabled still required)")
+	} else {
+		fmt.Fprintln(os.Stderr, "medea: provisioning executor disabled (pass --provisioning to enable)")
 	}
 
 	errCh := make(chan error, 1)

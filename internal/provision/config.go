@@ -14,7 +14,20 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
+	"gopkg.in/yaml.v3"
 )
+
+// LoadSecretsBundle parses captured secrets.yaml bytes (creds.Secrets, M1) into a
+// bundle usable by RenderWorkerConfig. It restores the Clock (yaml-skipped) so
+// the bundle is fully usable.
+func LoadSecretsBundle(b []byte) (*secrets.Bundle, error) {
+	var bundle secrets.Bundle
+	if err := yaml.Unmarshal(b, &bundle); err != nil {
+		return nil, fmt.Errorf("provision: parse secrets bundle: %w", err)
+	}
+	bundle.Clock = secrets.NewClock()
+	return &bundle, nil
+}
 
 // WorkerConfigInput is everything needed to render a worker join config. v2
 // provisions workers into an existing cluster (provisioning-plane.md §4, §9);

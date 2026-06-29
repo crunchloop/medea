@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	pb "github.com/bilby91/medea/gen/medea/v1"
 	"github.com/bilby91/medea/internal/kube"
@@ -12,10 +13,15 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 )
 
+// drainTimeout bounds the scale-in drain before release.
+const drainTimeout = 5 * time.Minute
+
 // KubeOps is the slice of the kube client the provisioning reconciler needs:
-// observing which nodes have joined. Narrowed for unit-testing with a fake.
+// observing which nodes have joined (scale-out) and draining a node before
+// release (scale-in). Narrowed for unit-testing with a fake.
 type KubeOps interface {
 	ListNodes(ctx context.Context) ([]kube.NodeInfo, error)
+	Drain(ctx context.Context, name string, timeout time.Duration) error
 }
 
 // SecretsFunc loads + parses a cluster's captured secrets bundle (from the
@@ -104,16 +110,92 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 	if inflight > 0 {
 		return nil // wait for the in-flight host to join before starting another
 	}
-	if ready >= int(np.GetReplicas()) {
-		return nil // converged (scale-in is v2-M4)
+	switch {
+	case ready > int(np.GetReplicas()):
+		// 2a) Scale in: release one Ready host (drain → unstage → remove).
+		return r.scaleIn(ctx, cluster, pool, hosts, nodes)
+	case ready < int(np.GetReplicas()):
+		// 2b) Scale out: stage one Available host matching the selector.
+		h := pickAvailable(hosts, np.GetSelector())
+		if h == nil {
+			return nil // no capacity — wait for a matching host to be registered
+		}
+		return r.stage(ctx, cl, np, h)
+	default:
+		return nil // converged
+	}
+}
+
+// scaleIn releases one Ready host: drain its node, unstage its boot config, drop
+// its Machine + pool membership, and return the host to Registered (Available
+// for reuse). Deterministic victim (lowest MAC) so passes are stable.
+func (r *Reconciler) scaleIn(ctx context.Context, cluster, pool string, hosts []*pb.Host, nodes []kube.NodeInfo) error {
+	var victim *pb.Host
+	for _, h := range hosts {
+		if h.GetState() == pb.HostState_HOST_STATE_READY {
+			if victim == nil || h.GetMac() < victim.GetMac() {
+				victim = h
+			}
+		}
+	}
+	if victim == nil {
+		return nil
 	}
 
-	// 2) Scale out: stage one Available host matching the selector.
-	h := pickAvailable(hosts, np.GetSelector())
-	if h == nil {
-		return nil // no capacity — wait for a matching host to be registered
+	if name := nodeNameFor(nodes, victim.GetAddr()); name != "" {
+		if err := r.kube.Drain(ctx, name, drainTimeout); err != nil {
+			return fmt.Errorf("provision: drain %s: %w", name, err)
+		}
 	}
-	return r.stage(ctx, cl, np, h)
+	if err := r.prov.Unstage(ctx, victim.GetMac()); err != nil {
+		return fmt.Errorf("provision: unstage %s: %w", victim.GetMac(), err)
+	}
+	if addr := victim.GetAddr(); addr != "" {
+		if err := r.store.DeleteMachine(cluster, addr); err != nil {
+			return err
+		}
+		if err := r.removeMember(cluster, pool, addr); err != nil {
+			return err
+		}
+	}
+	return r.releaseHost(cluster, victim.GetMac())
+}
+
+func (r *Reconciler) removeMember(cluster, pool, addr string) error {
+	np, rev, err := r.store.GetNodePool(cluster, pool)
+	if err != nil || np == nil {
+		return fmt.Errorf("provision: reload nodepool %s/%s: %w", cluster, pool, err)
+	}
+	out := np.Members[:0]
+	for _, m := range np.Members {
+		if m != addr {
+			out = append(out, m)
+		}
+	}
+	np.Members = out
+	_, err = r.store.PutNodePoolDesired(np, rev)
+	return err
+}
+
+func (r *Reconciler) releaseHost(cluster, mac string) error {
+	h, rev, err := r.store.GetHost(cluster, mac)
+	if err != nil || h == nil {
+		return fmt.Errorf("provision: reload host %s: %w", mac, err)
+	}
+	h.State = pb.HostState_HOST_STATE_REGISTERED
+	h.Addr = ""
+	h.Message = "released (scale-in)"
+	_, err = r.store.PutHostDesired(h, rev)
+	return err
+}
+
+func nodeNameFor(nodes []kube.NodeInfo, addr string) string {
+	for _, n := range nodes {
+		if n.InternalIP == addr {
+			return n.Name
+		}
+	}
+	return ""
 }
 
 func (r *Reconciler) stage(ctx context.Context, cl *pb.Cluster, np *pb.NodePool, h *pb.Host) error {

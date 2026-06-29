@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	pb "github.com/bilby91/medea/gen/medea/v1"
 	"github.com/bilby91/medea/internal/kube"
@@ -30,9 +31,16 @@ type fakeResolver struct{ id string }
 
 func (f fakeResolver) Resolve(context.Context, []string) (string, error) { return f.id, nil }
 
-type fakeKube struct{ nodes []kube.NodeInfo }
+type fakeKube struct {
+	nodes   []kube.NodeInfo
+	drained []string
+}
 
-func (f fakeKube) ListNodes(context.Context) ([]kube.NodeInfo, error) { return f.nodes, nil }
+func (f *fakeKube) ListNodes(context.Context) ([]kube.NodeInfo, error) { return f.nodes, nil }
+func (f *fakeKube) Drain(_ context.Context, name string, _ time.Duration) error {
+	f.drained = append(f.drained, name)
+	return nil
+}
 
 func provStore(t *testing.T) *store.BoltStore {
 	t.Helper()
@@ -75,8 +83,8 @@ func newRec(t *testing.T, st *store.BoltStore, p Provisioner, k KubeOps) *Reconc
 }
 
 // Only the control-plane node exists yet — no worker has joined.
-func cpOnly() fakeKube {
-	return fakeKube{nodes: []kube.NodeInfo{{Name: "cp1", InternalIP: "10.5.0.2", Role: "controlplane", Ready: true}}}
+func cpOnly() *fakeKube {
+	return &fakeKube{nodes: []kube.NodeInfo{{Name: "cp1", InternalIP: "10.5.0.2", Role: "controlplane", Ready: true}}}
 }
 
 func TestReconcileGuardDisabled(t *testing.T) {
@@ -116,7 +124,7 @@ func TestReconcileBindsOnJoin(t *testing.T) {
 	seedProv(t, st, true, pb.HostState_HOST_STATE_PROVISIONING) // already staged
 	p := &fakeProv{}
 	// The provisioned worker has now joined.
-	k := fakeKube{nodes: []kube.NodeInfo{
+	k := &fakeKube{nodes: []kube.NodeInfo{
 		{Name: "cp1", InternalIP: "10.5.0.2", Role: "controlplane", Ready: true},
 		{Name: "w1", InternalIP: "10.5.0.3", Role: "worker", Ready: true},
 	}}
@@ -160,5 +168,66 @@ func TestReconcileNoCapacity(t *testing.T) {
 	}
 	if len(p.staged) != 0 {
 		t.Fatalf("staged with no available host: %v", p.staged)
+	}
+}
+
+func TestReconcileScaleIn(t *testing.T) {
+	st := provStore(t)
+	if _, err := st.PutClusterDesired(&pb.Cluster{
+		Name: "home", Desired: &pb.ClusterDesired{TalosVersion: "v1.13.5"},
+		Endpoints: &pb.ClusterEndpoints{Kube: "10.5.0.2:6443"}, ProvisioningEnabled: true,
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	// replicas=1 but two Ready hosts -> scale in one (victim = lowest MAC = aa:bb).
+	if _, err := st.PutNodePoolDesired(&pb.NodePool{
+		Cluster: "home", Name: "workers", Role: pb.Role_ROLE_WORKER, Replicas: 1,
+		Members: []string{"10.5.0.3", "10.5.0.4"},
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []struct{ mac, addr string }{{"aa:bb", "10.5.0.3"}, {"cc:dd", "10.5.0.4"}} {
+		if _, err := st.PutHostDesired(&pb.Host{
+			Cluster: "home", Mac: h.mac, Pool: "workers", Role: pb.Role_ROLE_WORKER,
+			Addr: h.addr, State: pb.HostState_HOST_STATE_READY,
+		}, 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.PutMachineDesired(&pb.Machine{Cluster: "home", Pool: "workers", TalosEndpoint: h.addr, Role: pb.Role_ROLE_WORKER}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := &fakeProv{}
+	k := &fakeKube{nodes: []kube.NodeInfo{
+		{Name: "cp1", InternalIP: "10.5.0.2", Role: "controlplane", Ready: true},
+		{Name: "w1", InternalIP: "10.5.0.3", Role: "worker", Ready: true},
+		{Name: "w2", InternalIP: "10.5.0.4", Role: "worker", Ready: true},
+	}}
+	if err := newRec(t, st, p, k).ReconcilePool(context.Background(), "home", "workers"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Victim aa:bb (10.5.0.3): drained, unstaged, machine+member removed, released.
+	if len(k.drained) != 1 || k.drained[0] != "w1" {
+		t.Fatalf("expected w1 drained, got %v", k.drained)
+	}
+	if len(p.unstaged) != 1 || p.unstaged[0] != "aa:bb" {
+		t.Fatalf("expected aa:bb unstaged, got %v", p.unstaged)
+	}
+	h, _, _ := st.GetHost("home", "aa:bb")
+	if h.GetState() != pb.HostState_HOST_STATE_REGISTERED || h.GetAddr() != "" {
+		t.Fatalf("victim not released: %+v", h)
+	}
+	if m, _, _ := st.GetMachine("home", "10.5.0.3"); m != nil {
+		t.Fatalf("victim machine not deleted: %+v", m)
+	}
+	np, _, _ := st.GetNodePool("home", "workers")
+	if contains(np.GetMembers(), "10.5.0.3") || !contains(np.GetMembers(), "10.5.0.4") {
+		t.Fatalf("members wrong after scale-in: %v", np.GetMembers())
+	}
+	// The other host is untouched.
+	if h2, _, _ := st.GetHost("home", "cc:dd"); h2.GetState() != pb.HostState_HOST_STATE_READY {
+		t.Fatalf("non-victim changed: %+v", h2)
 	}
 }

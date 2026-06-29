@@ -78,6 +78,7 @@ type Store interface {
 	GetMachine(cluster, addr string) (*pb.Machine, Revision, error)
 	ListMachines(cluster, pool string) ([]*pb.Machine, error)
 	PutMachineDesired(m *pb.Machine, expected Revision) (Revision, error)
+	DeleteMachine(cluster, addr string) error
 
 	GetHost(cluster, mac string) (*pb.Host, Revision, error)
 	ListHosts(cluster, pool string) ([]*pb.Host, error)
@@ -523,6 +524,34 @@ func (s *BoltStore) DeleteHost(cluster, mac string) error {
 	}
 	s.lastRev = newRev
 	s.publish(Event{Kind: KindHost, Key: cluster + "/" + mac, Revision: newRev})
+	return nil
+}
+
+// DeleteMachine removes a machine identity record (used by provisioning scale-in)
+// and clears its in-memory observed entry.
+func (s *BoltStore) DeleteMachine(cluster, addr string) error {
+	if cluster == "" || addr == "" {
+		return errors.New("store: machine cluster and addr required")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	var newRev Revision
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		r, err := bumpRev(tx)
+		if err != nil {
+			return err
+		}
+		newRev = r
+		return tx.Bucket(bDesired).Bucket(sMachines).Delete(ckey(cluster, addr))
+	})
+	if err != nil {
+		return err
+	}
+	s.obsMu.Lock()
+	delete(s.obsMachine, cluster+"\x00"+addr)
+	s.obsMu.Unlock()
+	s.lastRev = newRev
+	s.publish(Event{Kind: KindMachine, Key: cluster + "/" + addr, Revision: newRev})
 	return nil
 }
 
