@@ -40,6 +40,11 @@ MB_ASSETS="$WORKDIR/matchbox/assets"
 TFTP_DIR="$WORKDIR/tftp"
 MATCHBOX_URL="http://${GW_IP}:8080"
 
+# Stock (no-extensions) Image Factory schematic + default Talos version, for the
+# hand-staged maintenance-boot smoke (stage-stock).
+STOCK_SCHEMATIC="${STOCK_SCHEMATIC:-376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba}"
+TALOS_VERSION="${TALOS_VERSION:-v1.13.5}"
+
 log() { echo ">> $*" >&2; }
 
 cmd_ip() { echo "$GW_IP"; }
@@ -48,7 +53,7 @@ cmd_deps() {
   log "installing lab dependencies (apt)"
   sudo apt-get update -qq
   # qemu (full system + the arch we target), dnsmasq, ipxe bootloaders, UEFI fw.
-  local pkgs=(dnsmasq ipxe qemu-utils curl ca-certificates)
+  local pkgs=(dnsmasq ipxe qemu-utils iptables curl ca-certificates)
   if [ "$ARCH" = amd64 ]; then
     pkgs+=(qemu-system-x86 ovmf)
   else
@@ -82,6 +87,19 @@ cmd_up() {
   sudo ip link add name "$BR" type bridge 2>/dev/null || true
   sudo ip addr add "$GW_IP/24" dev "$BR" 2>/dev/null || true
   sudo ip link set "$BR" up
+
+  # The dnsmasq apt package auto-starts a system service that would conflict with
+  # the lab's own dnsmasq on the bridge — disable it; we run our own.
+  sudo systemctl disable --now dnsmasq 2>/dev/null || true
+
+  # NAT egress so lab nodes can reach the Image Factory (boot assets + install
+  # image) and the rest of the internet over the isolated bridge. Non-fatal so a
+  # missing iptables doesn't abort `up` (nodes just lack egress).
+  sudo sysctl -wq net.ipv4.ip_forward=1 || true
+  { sudo iptables -t nat -C POSTROUTING -s "${SUBNET}.0/24" ! -o "$BR" -j MASQUERADE 2>/dev/null ||
+    sudo iptables -t nat -A POSTROUTING -s "${SUBNET}.0/24" ! -o "$BR" -j MASQUERADE; } || log "WARN: NAT setup failed (nodes may lack internet egress)"
+  sudo iptables -C FORWARD -i "$BR" -j ACCEPT 2>/dev/null || sudo iptables -A FORWARD -i "$BR" -j ACCEPT || true
+  sudo iptables -C FORWARD -o "$BR" -j ACCEPT 2>/dev/null || sudo iptables -A FORWARD -o "$BR" -j ACCEPT || true
 
   write_dnsmasq_conf
   log "starting dnsmasq on $BR"
@@ -128,6 +146,28 @@ dhcp-boot=tag:ipxe,$MATCHBOX_URL/boot.ipxe
 EOF
 }
 
+# stage-stock <mac> — hand-write a Matchbox group+profile that PXE-boots stock
+# Talos into maintenance mode (no machine config = no install). Iteration-2 smoke
+# of the UEFI -> iPXE -> Matchbox -> Talos chain; NOT how Medea stages (that's the
+# reconciler writing the same files with a real config).
+cmd_stage_stock() {
+  local mac="$1"
+  local key; key="$(echo "$mac" | tr 'A-Z:/ ' 'a-z---')"
+  local base="https://factory.talos.dev/image/${STOCK_SCHEMATIC}/${TALOS_VERSION}"
+  local console; [ "$ARCH" = amd64 ] && console="ttyS0" || console="ttyAMA0"
+  cat >"$MB_DIR/profiles/${key}.json" <<EOF
+{ "id":"$key","name":"$key","boot":{
+  "kernel":"$base/kernel-${ARCH}",
+  "initrd":["$base/initramfs-${ARCH}.xz"],
+  "args":["initrd=initramfs-${ARCH}.xz","talos.platform=metal","console=$console"]
+}}
+EOF
+  cat >"$MB_DIR/groups/${key}.json" <<EOF
+{ "id":"$key","name":"$key","profile":"$key","selector":{"mac":"$mac"} }
+EOF
+  log "staged stock Talos $TALOS_VERSION ($ARCH) for $mac -> maintenance"
+}
+
 # boot <mac> <name> [disk-size] — PXE-boot a QEMU node on the bridge.
 cmd_boot() {
   local mac="$1" name="$2" disk_size="${3:-10G}"
@@ -153,7 +193,7 @@ cmd_boot() {
     -m "$MEM" -smp 2 -nographic \
     -drive file="$disk",if=virtio,format=qcow2 \
     -netdev tap,id=n0,ifname="$tap",script=no,downscript=no \
-    -device virtio-net-pci,netdev=n0,mac="$mac" \
+    -device virtio-net-pci,netdev=n0,mac="$mac",bootindex=0 \
     -boot n \
     >"$WORKDIR/${name}.console.log" 2>&1 &
   echo $! >"$WORKDIR/${name}.pid"
@@ -173,8 +213,9 @@ cmd_down() {
 case "${1:-}" in
 deps) cmd_deps ;;
 up) cmd_up ;;
+stage-stock) shift; cmd_stage_stock "$@" ;;
 boot) shift; cmd_boot "$@" ;;
 down) cmd_down ;;
 ip) cmd_ip ;;
-*) echo "usage: $0 {deps|up|boot <mac> <name> [disk]|down|ip}" >&2; exit 2 ;;
+*) echo "usage: $0 {deps|up|stage-stock <mac>|boot <mac> <name> [disk]|down|ip}" >&2; exit 2 ;;
 esac
