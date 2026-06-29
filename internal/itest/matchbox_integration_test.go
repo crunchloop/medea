@@ -44,9 +44,12 @@ func TestMatchboxServesStagedHost(t *testing.T) {
 
 	name := "medea-matchbox-it"
 	_ = exec.Command("docker", "rm", "-f", name).Run()
+	// -assets-path= disables Matchbox local asset serving (it fatals otherwise on
+	// a missing default assets dir). Medea's profiles boot kernel/initrd straight
+	// from the Image Factory, so Matchbox serves only groups/profiles/generic.
 	run(t, 3*time.Minute, "docker", "run", "-d", "--name", name, "--platform", "linux/amd64",
 		"-p", port+":8080", "-v", dir+":/var/lib/matchbox:ro",
-		"quay.io/poseidon/matchbox:v0.11.0", "-address=0.0.0.0:8080", "-log-level=debug")
+		"quay.io/poseidon/matchbox:v0.11.0", "-address=0.0.0.0:8080", "-assets-path=", "-log-level=debug")
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
 	waitHTTP(t, httpURL+"/", 60*time.Second)
