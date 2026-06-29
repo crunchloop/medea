@@ -16,7 +16,7 @@ credentials** to managed clusters and owns destructive primitives (`UpgradeOS`,
 `Drain`, `EtcdSnapshot`). The design requirement is therefore not "can it
 upgrade" but: **every path by which a cluster gets mutated must be a deliberate
 human act.** Accidental action must be structurally impossible, not merely
-unlikely. The primary managed cluster (the production cluster) must never be rolled out
+unlikely. The primary managed cluster must never be rolled out
 unintentionally.
 
 ## 2. Trigger model: explicit jobs, with a per-cluster mode
@@ -35,7 +35,7 @@ A per-cluster **`mode`** governs this:
   control-plane pools**, and only on an enabled cluster. Not built in v1;
   selecting it is rejected.
 
-the production cluster stays `manual`.
+The production cluster stays `manual`.
 
 ## 3. Guards (defense in depth)
 
@@ -43,7 +43,7 @@ Independent layers, so no single mistake suffices:
 
 1. **`rolloutsEnabled` per cluster — default `false`.** Seeding *never* sets it.
    A cluster is actionable only after a separate, deliberate
-   `medea cluster enable-rollouts <name>`. **the production cluster is simply never enabled**, which
+   `medea cluster enable-rollouts <name>`. **The production cluster is simply never enabled**, which
    makes accidental action structurally impossible regardless of every other
    layer. Enforced at **both** job creation *and* job execution (a hand-injected
    job won't run against a disabled cluster).
