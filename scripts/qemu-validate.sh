@@ -23,6 +23,24 @@ echo ">> cluster=$NAME  target=$TARGET  workdir=$DIR"
 echo ">> destroying any prior cluster (sudo)"
 sudo talosctl cluster destroy --name "$NAME" 2>/dev/null || true
 
+# `cluster destroy` only knows about the cluster it can still see in state; a
+# prior run that died mid-create (or was Ctrl-C'd) leaves ORPHANED root procs —
+# the per-node QEMU, `talosctl qemu-launch`, `talosctl loadbalancer-launch`, and
+# especially the `talosctl` dhcpd holding UDP/67. The next create then fails with
+# "DHCPd server has not started" / "cannot bind to port 67: address already in
+# use". Reap any "$NAME" orphans, then the stale state dir, before creating.
+echo ">> reaping orphaned $NAME procs + stale state (sudo)"
+sudo pkill -f "$NAME" 2>/dev/null || true
+sudo pkill -f "talosctl qemu-launch" 2>/dev/null || true
+sudo pkill -f "talosctl loadbalancer-launch" 2>/dev/null || true
+sudo rm -rf "$HOME/.talos/clusters/$NAME" 2>/dev/null || true
+# If something still holds the DHCP port, name it so the failure is diagnosable
+# rather than a bare timeout (e.g. macOS `bootpd` from a vmnet-shared race).
+if sudo lsof -nP -iUDP:67 >/dev/null 2>&1; then
+  echo ">> WARNING: UDP/67 still held after cleanup — talosctl dhcpd will fail to bind:" >&2
+  sudo lsof -nP -iUDP:67 >&2 || true
+fi
+
 echo ">> creating QEMU cluster (sudo; downloads images + boots VMs, a few minutes)"
 # disk-image preset: boot a pre-installed Talos disk (A/B partitions present, no
 # install-then-reboot during bootstrap) — converges faster and is the right shape

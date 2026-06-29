@@ -8,3 +8,8 @@ medea-desired.json
 
 # design notes (in-flight); also covered by repo-root .gitignore
 design/private/
+
+# talosctl test artifacts (`talosctl cluster create` drops these in cwd during
+# `make test-qemu`) — throwaway, never commit
+/controlplane.yaml
+/worker.yaml
