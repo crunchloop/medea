@@ -153,13 +153,28 @@ EOF
 cmd_stage_stock() {
   local mac="$1"
   local key; key="$(echo "$mac" | tr 'A-Z:/ ' 'a-z---')"
-  local base="https://factory.talos.dev/image/${STOCK_SCHEMATIC}/${TALOS_VERSION}"
+  local factory="https://factory.talos.dev/image/${STOCK_SCHEMATIC}/${TALOS_VERSION}"
   local console; [ "$ARCH" = amd64 ] && console="ttyS0" || console="ttyAMA0"
+
+  # The Ubuntu iPXE EFI builds ship WITHOUT HTTPS/TLS support, so iPXE silently
+  # fails on `kernel https://...` (matches the config, never fetches the kernel).
+  # Cache the assets locally on the lab host (which CAN reach the Image Factory
+  # over HTTPS) and serve them from Matchbox over plain HTTP — this is also how
+  # the real netboot/ plane hosts kernel/initrd. URLs => $MATCHBOX_URL/assets/...
+  local kfile="kernel-${ARCH}" ifile="initramfs-${ARCH}.xz"
+  mkdir -p "$MB_ASSETS"
+  for f in "$kfile" "$ifile"; do
+    if [ ! -s "$MB_ASSETS/$f" ]; then
+      log "caching $f from Image Factory (HTTPS, host-side) -> matchbox assets"
+      curl -fSL --retry 3 -o "$MB_ASSETS/$f" "$factory/$f"
+    fi
+  done
+  local base="${MATCHBOX_URL}/assets"
   cat >"$MB_DIR/profiles/${key}.json" <<EOF
 { "id":"$key","name":"$key","boot":{
-  "kernel":"$base/kernel-${ARCH}",
-  "initrd":["$base/initramfs-${ARCH}.xz"],
-  "args":["initrd=initramfs-${ARCH}.xz","talos.platform=metal","console=$console"]
+  "kernel":"$base/${kfile}",
+  "initrd":["$base/${ifile}"],
+  "args":["initrd=${ifile}","talos.platform=metal","console=$console"]
 }}
 EOF
   cat >"$MB_DIR/groups/${key}.json" <<EOF
