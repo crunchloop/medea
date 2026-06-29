@@ -16,6 +16,11 @@ type Store interface {
 	TalosConfig(cluster string) ([]byte, error)
 	KubeConfig(cluster string) ([]byte, error)
 	Put(cluster string, talos, kube []byte) error
+	// Secrets is the cluster machine-secrets bundle (Talos secrets.yaml),
+	// captured from the live cluster for provisioning join configs
+	// (design/provisioning-plane.md §5).
+	Secrets(cluster string) ([]byte, error)
+	PutSecrets(cluster string, secrets []byte) error
 }
 
 // FileStore is the v1 implementation: a 0700 directory of per-cluster 0600
@@ -25,8 +30,9 @@ type FileStore struct {
 }
 
 const (
-	talosFile = "talosconfig"
-	kubeFile  = "kubeconfig"
+	talosFile   = "talosconfig"
+	kubeFile    = "kubeconfig"
+	secretsFile = "secrets.yaml"
 )
 
 // NewFileStore roots a FileStore at dir, creating it 0700 if needed.
@@ -54,6 +60,18 @@ func (f *FileStore) Put(cluster string, talos, kube []byte) error {
 		return err
 	}
 	return writeSecret(filepath.Join(dir, kubeFile), kube)
+}
+
+func (f *FileStore) Secrets(cluster string) ([]byte, error) {
+	return f.read(cluster, secretsFile)
+}
+
+func (f *FileStore) PutSecrets(cluster string, secrets []byte) error {
+	dir := filepath.Join(f.dir, cluster)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return writeSecret(filepath.Join(dir, secretsFile), secrets)
 }
 
 func (f *FileStore) read(cluster, name string) ([]byte, error) {

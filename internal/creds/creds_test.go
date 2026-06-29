@@ -40,3 +40,25 @@ func TestFileStoreRoundTripAndPerms(t *testing.T) {
 		t.Fatal("expected error for missing cluster")
 	}
 }
+
+func TestSecretsRoundTripAndPerms(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "creds")
+	s, err := NewFileStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutSecrets("home", []byte("SECRETS-BUNDLE")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Secrets("home")
+	if err != nil || string(got) != "SECRETS-BUNDLE" {
+		t.Fatalf("secrets: %v / %q", err, got)
+	}
+	fi, _ := os.Stat(filepath.Join(dir, "home", secretsFile))
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("secrets.yaml perm = %o, want 600", fi.Mode().Perm())
+	}
+	if _, err := s.Secrets("missing"); err == nil {
+		t.Fatal("expected error for missing secrets")
+	}
+}

@@ -78,6 +78,11 @@ they are defined now so the seam is visible, not yet exercised.
 - **No observed projection** — a Host is desired inventory; its eventual `addr`
   and `Ready` state are written by the reconciler as desired-side lifecycle, not
   as a refreshed observed cache.
+- **Secrets capture is done in v2-M1** (`talos.CaptureSecrets` +
+  `creds.PutSecrets`, `medea capture-secrets`): the existing cluster's
+  secrets bundle is extracted from a live control-plane config into the
+  `CredentialStore` (`provisioning-plane.md` §5), ready for v2-M2 join-config
+  generation.
 - **Known gaps (v2-M1):** only `Registered` is ever set; the lifecycle reconciler,
-  `NodePool.replicas`/`selector` matching, Matchbox staging, and secrets capture
-  are v2-M2/M3 (`provisioning-plane.md` §§3–6).
+  `NodePool.replicas`/`selector` matching, and Matchbox staging are v2-M2/M3
+  (`provisioning-plane.md` §§3, 4, 6).
