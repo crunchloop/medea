@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilby91/medea/internal/provision"
@@ -12,7 +13,7 @@ import (
 
 func TestStageWritesGroupProfileAndConfig(t *testing.T) {
 	root := t.TempDir()
-	s, err := New(root)
+	s, err := New(root, "http://matchbox:8086/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,20 +46,30 @@ func TestStageWritesGroupProfileAndConfig(t *testing.T) {
 		t.Fatalf("group wrong: %+v", g)
 	}
 
-	// profile carries boot assets + references the generic config.
+	// profile carries boot assets + references the generic config via generic_id.
 	var p profile
 	readJSON(t, filepath.Join(root, profilesDir, key+".json"), &p)
-	if p.Boot.Kernel != "https://factory/kernel" || len(p.Boot.Initrd) != 1 || p.GenericConfig != key {
+	if p.Boot.Kernel != "https://factory/kernel" || len(p.Boot.Initrd) != 1 || p.GenericID != key {
 		t.Fatalf("profile wrong: %+v", p)
 	}
-	if len(p.Boot.Args) != 2 || p.Boot.Args[0] != "talos.platform=metal" {
-		t.Fatalf("profile args wrong: %+v", p.Boot.Args)
+	// caller args are preserved and a talos.config arg pointing at Matchbox is added.
+	joined := strings.Join(p.Boot.Args, " ")
+	for _, want := range []string{"talos.platform=metal", "console=ttyS0", "talos.config=http://matchbox:8086/generic?mac=${net0/mac:hexhyp}"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("profile args missing %q: %v", want, p.Boot.Args)
+		}
+	}
+
+	// the JSON field must be "generic_id" (what Matchbox actually reads).
+	raw, _ := os.ReadFile(filepath.Join(root, profilesDir, key+".json"))
+	if !strings.Contains(string(raw), `"generic_id"`) {
+		t.Fatalf("profile JSON missing generic_id field:\n%s", raw)
 	}
 }
 
 func TestUnstageRemovesAndIsIdempotent(t *testing.T) {
 	root := t.TempDir()
-	s, _ := New(root)
+	s, _ := New(root, "http://matchbox:8086")
 	mac := "aa:bb:cc:dd:ee:ff"
 	if err := s.Stage(context.Background(), mac, provision.Profile{Kernel: "k"}, []byte("x")); err != nil {
 		t.Fatal(err)

@@ -221,8 +221,12 @@ magic-packet test; nmap 623/Redfish probe for BMC).
 
 ## 10. Open questions
 
-- **Matchbox write path** — gRPC API vs file-backed (§3). Pick at v2-M2 against
-  the deployed Matchbox.
+- **Matchbox write path** — RESOLVED (v2-M2): **file-backed**, validated against
+  a real Matchbox v0.11 in docker (`TestMatchboxServesStagedHost`). Two contract
+  details the integration test pinned: the profile field is **`generic_id`** (not
+  `generic_config`), and the driver must add the **`talos.config=<matchbox>/generic?mac=…`**
+  kernel arg or a booted node never fetches its config. A gRPC-API impl stays an
+  option behind the same seam.
 - **Host discovery** — v2 is manual `host register --mac`. Is DHCP-snoop
   discovery worth it for a 3-node homelab? Likely not yet.
 - **IP assignment** — static patch vs DHCP reservation (dnsmasq already hands out

@@ -23,7 +23,8 @@ import (
 
 // Store writes Matchbox group/profile/generic files under a data root.
 type Store struct {
-	root string
+	root    string
+	httpURL string // Matchbox's externally-reachable base URL (for the talos.config arg)
 }
 
 // subdirs of the Matchbox data path.
@@ -33,16 +34,21 @@ const (
 	genericDir  = "generic" // the machine configs Matchbox serves at /generic
 )
 
-// New roots a Store at the Matchbox data directory, creating the
-// groups/profiles/generic subdirs (0755 — these are served assets, not secrets;
-// the machine config inside is sensitive and written 0600).
-func New(root string) (*Store, error) {
+// New roots a Store at the Matchbox data directory (its -data-path), creating the
+// groups/profiles/generic subdirs (0755 — these are served assets; the machine
+// config inside is sensitive and written 0600). httpURL is the base URL nodes
+// reach Matchbox at (e.g. "http://10.0.0.5:8086"), used to build the
+// node's talos.config kernel arg.
+func New(root, httpURL string) (*Store, error) {
+	if httpURL == "" {
+		return nil, fmt.Errorf("matchbox: httpURL required (the node's talos.config points at it)")
+	}
 	for _, d := range []string{groupsDir, profilesDir, genericDir} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
 			return nil, fmt.Errorf("matchbox: create %s: %w", d, err)
 		}
 	}
-	return &Store{root: root}, nil
+	return &Store{root: root, httpURL: strings.TrimRight(httpURL, "/")}, nil
 }
 
 // group is the Matchbox group schema: match a machine (by MAC) to a profile.
@@ -53,12 +59,14 @@ type group struct {
 	Selector map[string]string `json:"selector"`
 }
 
-// profile is the Matchbox profile schema: boot assets + the generic config name.
+// profile is the Matchbox profile schema: boot assets + the generic config id.
+// NOTE: the field Matchbox reads is "generic_id" (not "generic_config") — it
+// names a file under <data-path>/generic served at /generic for matched machines.
 type profile struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Boot          bootSpec `json:"boot"`
-	GenericConfig string   `json:"generic_config"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Boot      bootSpec `json:"boot"`
+	GenericID string   `json:"generic_id"`
 }
 
 type bootSpec struct {
@@ -79,11 +87,16 @@ func (s *Store) Stage(_ context.Context, mac string, p provision.Profile, machin
 	if err := os.WriteFile(s.path(genericDir, key), machineConfig, 0o600); err != nil {
 		return fmt.Errorf("matchbox: write generic config: %w", err)
 	}
+	// talos.config tells the booting node where to fetch its machine config —
+	// Matchbox's /generic endpoint, matched by the node's MAC/UUID (rendered by
+	// Matchbox's iPXE templating per request). Without it the node can't join.
+	args := append([]string(nil), p.Args...)
+	args = append(args, fmt.Sprintf("talos.config=%s/generic?mac=${net0/mac:hexhyp}&uuid=${uuid}", s.httpURL))
 	if err := s.writeJSON(profilesDir, key, profile{
-		ID:            key,
-		Name:          key,
-		Boot:          bootSpec{Kernel: p.Kernel, Initrd: p.Initrd, Args: p.Args},
-		GenericConfig: key,
+		ID:        key,
+		Name:      key,
+		Boot:      bootSpec{Kernel: p.Kernel, Initrd: p.Initrd, Args: args},
+		GenericID: key,
 	}); err != nil {
 		return err
 	}
