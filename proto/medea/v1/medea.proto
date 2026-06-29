@@ -94,6 +94,7 @@ message Host {
   HostState state = 7;
   string message = 8;
   uint64 revision = 9;
+  string provisioning_started_at = 10; // RFC3339, stamped when state -> PROVISIONING (for the join timeout)
 }
 
 enum HostState {

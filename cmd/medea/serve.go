@@ -65,6 +65,7 @@ var (
 	serveFactoryHost   string
 	serveInstallDisk   string
 	serveProvisionIntv time.Duration
+	serveProvisionTO   time.Duration
 )
 
 func init() {
@@ -92,6 +93,7 @@ func init() {
 	f.StringVar(&serveFactoryHost, "factory-host", provision.DefaultFactoryHost, "Talos Image Factory host")
 	f.StringVar(&serveInstallDisk, "install-disk", "/dev/sda", "install disk for provisioned nodes")
 	f.DurationVar(&serveProvisionIntv, "provision-interval", 30*time.Second, "how often the provisioning executor reconciles")
+	f.DurationVar(&serveProvisionTO, "provision-timeout", 20*time.Minute, "how long a host may stay provisioning before it is marked failed")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -168,7 +170,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		}
 		go provision.NewExecutor(st, mb, provision.NewFactoryClient(serveFactoryHost),
 			provision.CredsKubeFactory(cs), provision.CredsSecretsFunc(cs),
-			serveFactoryHost, serveInstallDisk, serveProvisionIntv).Run(ctx)
+			serveFactoryHost, serveInstallDisk, serveProvisionTO, serveProvisionIntv).Run(ctx)
 		fmt.Fprintln(os.Stderr, "medea: provisioning executor ENABLED (per-cluster provisioning-enabled still required)")
 	} else {
 		fmt.Fprintln(os.Stderr, "medea: provisioning executor disabled (pass --provisioning to enable)")

@@ -921,18 +921,19 @@ func (x *NodePoolDesired) GetTalosVersion() string {
 // (v2-M3) drives the rest of the lifecycle.
 // ---------------------------------------------------------------------------
 type Host struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cluster       string                 `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	Mac           string                 `protobuf:"bytes,2,opt,name=mac,proto3" json:"mac,omitempty"`                                                                                 // identity within a cluster
-	Pool          string                 `protobuf:"bytes,3,opt,name=pool,proto3" json:"pool,omitempty"`                                                                               // owning pool once allocated
-	Labels        map[string]string      `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // matched by NodePool.selector
-	Addr          string                 `protobuf:"bytes,5,opt,name=addr,proto3" json:"addr,omitempty"`                                                                               // observed Talos endpoint once it joins
-	Role          Role                   `protobuf:"varint,6,opt,name=role,proto3,enum=medea.v1.Role" json:"role,omitempty"`
-	State         HostState              `protobuf:"varint,7,opt,name=state,proto3,enum=medea.v1.HostState" json:"state,omitempty"`
-	Message       string                 `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`
-	Revision      uint64                 `protobuf:"varint,9,opt,name=revision,proto3" json:"revision,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Cluster               string                 `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Mac                   string                 `protobuf:"bytes,2,opt,name=mac,proto3" json:"mac,omitempty"`                                                                                 // identity within a cluster
+	Pool                  string                 `protobuf:"bytes,3,opt,name=pool,proto3" json:"pool,omitempty"`                                                                               // owning pool once allocated
+	Labels                map[string]string      `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // matched by NodePool.selector
+	Addr                  string                 `protobuf:"bytes,5,opt,name=addr,proto3" json:"addr,omitempty"`                                                                               // observed Talos endpoint once it joins
+	Role                  Role                   `protobuf:"varint,6,opt,name=role,proto3,enum=medea.v1.Role" json:"role,omitempty"`
+	State                 HostState              `protobuf:"varint,7,opt,name=state,proto3,enum=medea.v1.HostState" json:"state,omitempty"`
+	Message               string                 `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`
+	Revision              uint64                 `protobuf:"varint,9,opt,name=revision,proto3" json:"revision,omitempty"`
+	ProvisioningStartedAt string                 `protobuf:"bytes,10,opt,name=provisioning_started_at,json=provisioningStartedAt,proto3" json:"provisioning_started_at,omitempty"` // RFC3339, stamped when state -> PROVISIONING (for the join timeout)
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Host) Reset() {
@@ -1026,6 +1027,13 @@ func (x *Host) GetRevision() uint64 {
 		return x.Revision
 	}
 	return 0
+}
+
+func (x *Host) GetProvisioningStartedAt() string {
+	if x != nil {
+		return x.ProvisioningStartedAt
+	}
+	return ""
 }
 
 type RolloutStrategy struct {
@@ -1573,7 +1581,7 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"6\n" +
 	"\x0fNodePoolDesired\x12#\n" +
-	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\"\xce\x02\n" +
+	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\"\x86\x03\n" +
 	"\x04Host\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12\x12\n" +
@@ -1583,7 +1591,9 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x04role\x18\x06 \x01(\x0e2\x0e.medea.v1.RoleR\x04role\x12)\n" +
 	"\x05state\x18\a \x01(\x0e2\x13.medea.v1.HostStateR\x05state\x12\x18\n" +
 	"\amessage\x18\b \x01(\tR\amessage\x12\x1a\n" +
-	"\brevision\x18\t \x01(\x04R\brevision\x1a9\n" +
+	"\brevision\x18\t \x01(\x04R\brevision\x126\n" +
+	"\x17provisioning_started_at\x18\n" +
+	" \x01(\tR\x15provisioningStartedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe5\x01\n" +

@@ -23,7 +23,7 @@ func TestExecutorSkipsDisabledCluster(t *testing.T) {
 	}
 	secretsFor := func(string) (*secrets.Bundle, error) { return testBundle(t), nil }
 
-	e := NewExecutor(st, p, fakeResolver{id: "s"}, kubeFor, secretsFor, "factory.talos.dev", "/dev/sda", time.Minute)
+	e := NewExecutor(st, p, fakeResolver{id: "s"}, kubeFor, secretsFor, "factory.talos.dev", "/dev/sda", 0, time.Minute)
 	if err := e.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestExecutorRunsEnabledPool(t *testing.T) {
 	kubeFor := func(context.Context, *pb.Cluster) (KubeOps, func(), error) { return cpOnly(), func() {}, nil }
 	secretsFor := func(string) (*secrets.Bundle, error) { return testBundle(t), nil }
 
-	e := NewExecutor(st, p, fakeResolver{id: "schem"}, kubeFor, secretsFor, "factory.talos.dev", "/dev/sda", time.Minute)
+	e := NewExecutor(st, p, fakeResolver{id: "schem"}, kubeFor, secretsFor, "factory.talos.dev", "/dev/sda", 0, time.Minute)
 	if err := e.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}

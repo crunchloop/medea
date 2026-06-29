@@ -23,21 +23,23 @@ type KubeFactory func(ctx context.Context, cl *pb.Cluster) (KubeOps, func(), err
 // per-cluster. It re-checks the provisioning guard (defense in depth) and is
 // started by `medea serve` only when --provisioning is set (a global gate).
 type Executor struct {
-	store       store.Store
-	prov        Provisioner
-	resolver    Resolver
-	kubeFor     KubeFactory
-	secretsFor  SecretsFunc
-	factoryHost string
-	installDisk string
-	interval    time.Duration
+	store            store.Store
+	prov             Provisioner
+	resolver         Resolver
+	kubeFor          KubeFactory
+	secretsFor       SecretsFunc
+	factoryHost      string
+	installDisk      string
+	provisionTimeout time.Duration
+	interval         time.Duration
 }
 
-// NewExecutor builds a provisioning executor.
-func NewExecutor(st store.Store, prov Provisioner, resolver Resolver, kubeFor KubeFactory, secretsFor SecretsFunc, factoryHost, installDisk string, interval time.Duration) *Executor {
+// NewExecutor builds a provisioning executor. provisionTimeout bounds how long a
+// host may sit in Provisioning before Failed (<= 0 = reconciler default).
+func NewExecutor(st store.Store, prov Provisioner, resolver Resolver, kubeFor KubeFactory, secretsFor SecretsFunc, factoryHost, installDisk string, provisionTimeout, interval time.Duration) *Executor {
 	return &Executor{
 		store: st, prov: prov, resolver: resolver, kubeFor: kubeFor, secretsFor: secretsFor,
-		factoryHost: factoryHost, installDisk: installDisk, interval: interval,
+		factoryHost: factoryHost, installDisk: installDisk, provisionTimeout: provisionTimeout, interval: interval,
 	}
 }
 
@@ -83,7 +85,7 @@ func (e *Executor) RunOnce(ctx context.Context) error {
 				log.Printf("provision executor: build kube for %q: %v", cl.GetName(), err)
 				continue // transient; next pass
 			}
-			r := NewReconciler(e.store, e.prov, e.resolver, kc, e.secretsFor, e.factoryHost, e.installDisk)
+			r := NewReconciler(e.store, e.prov, e.resolver, kc, e.secretsFor, e.factoryHost, e.installDisk, e.provisionTimeout)
 			if err := r.ReconcilePool(ctx, cl.GetName(), np.GetName()); err != nil {
 				log.Printf("provision executor: reconcile %s/%s: %v", cl.GetName(), np.GetName(), err)
 			}

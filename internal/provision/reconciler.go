@@ -16,6 +16,10 @@ import (
 // drainTimeout bounds the scale-in drain before release.
 const drainTimeout = 5 * time.Minute
 
+// defaultProvisionTimeout is how long a host may sit in Provisioning (booting +
+// installing + joining) before the reconciler gives up and marks it Failed.
+const defaultProvisionTimeout = 20 * time.Minute
+
 // KubeOps is the slice of the kube client the provisioning reconciler needs:
 // observing which nodes have joined (scale-out) and draining a node before
 // release (scale-in). Narrowed for unit-testing with a fake.
@@ -33,18 +37,26 @@ type SecretsFunc func(cluster string) (*secrets.Bundle, error)
 // config + machine config, and mark it Ready once the node joins. Scale-in /
 // deprovision is v2-M4. Each pass advances one host (one op at a time).
 type Reconciler struct {
-	store       store.Store
-	prov        Provisioner
-	resolver    Resolver
-	kube        KubeOps
-	secretsFor  SecretsFunc
-	factoryHost string
-	installDisk string
+	store            store.Store
+	prov             Provisioner
+	resolver         Resolver
+	kube             KubeOps
+	secretsFor       SecretsFunc
+	factoryHost      string
+	installDisk      string
+	provisionTimeout time.Duration
 }
 
-// NewReconciler builds a provisioning reconciler.
-func NewReconciler(st store.Store, p Provisioner, r Resolver, k KubeOps, secretsFor SecretsFunc, factoryHost, installDisk string) *Reconciler {
-	return &Reconciler{store: st, prov: p, resolver: r, kube: k, secretsFor: secretsFor, factoryHost: factoryHost, installDisk: installDisk}
+// NewReconciler builds a provisioning reconciler. provisionTimeout <= 0 uses the
+// default; it bounds how long a host may stay in Provisioning before Failed.
+func NewReconciler(st store.Store, p Provisioner, r Resolver, k KubeOps, secretsFor SecretsFunc, factoryHost, installDisk string, provisionTimeout time.Duration) *Reconciler {
+	if provisionTimeout <= 0 {
+		provisionTimeout = defaultProvisionTimeout
+	}
+	return &Reconciler{
+		store: st, prov: p, resolver: r, kube: k, secretsFor: secretsFor,
+		factoryHost: factoryHost, installDisk: installDisk, provisionTimeout: provisionTimeout,
+	}
 }
 
 // ReconcilePool converges a pool toward NodePool.replicas by provisioning
@@ -88,13 +100,17 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 		return err
 	}
 
-	// 1) Advance in-flight hosts: a Provisioning host whose node has joined → Ready.
+	// 1) Advance in-flight hosts: a Provisioning host whose node has joined → Ready;
+	// one that overran the timeout → Failed.
 	inflight := 0
 	ready := 0
+	failed := 0
 	for _, h := range hosts {
 		switch h.GetState() {
 		case pb.HostState_HOST_STATE_READY:
 			ready++
+		case pb.HostState_HOST_STATE_FAILED:
+			failed++
 		case pb.HostState_HOST_STATE_PROVISIONING:
 			if n, ok := newJoinedNode(nodes, claimed, np.GetRole()); ok {
 				if err := r.bind(cluster, pool, h.GetMac(), n, np.GetRole()); err != nil {
@@ -102,6 +118,12 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 				}
 				claimed[n.InternalIP] = struct{}{}
 				ready++
+			} else if r.timedOut(h) {
+				if err := r.setHostState(cluster, h.GetMac(), pb.HostState_HOST_STATE_FAILED,
+					"provision timed out: node did not join"); err != nil {
+					return err
+				}
+				failed++
 			} else {
 				inflight++ // still booting/joining — park (one op at a time)
 			}
@@ -109,6 +131,11 @@ func (r *Reconciler) ReconcilePool(ctx context.Context, cluster, pool string) er
 	}
 	if inflight > 0 {
 		return nil // wait for the in-flight host to join before starting another
+	}
+	if failed > 0 {
+		// Halt: a failed provision needs operator attention (clear the host) —
+		// don't burn through more hosts (mirrors rollout halt-on-failure).
+		return nil
 	}
 	switch {
 	case ready > int(np.GetReplicas()):
@@ -231,7 +258,35 @@ func (r *Reconciler) stage(ctx context.Context, cl *pb.Cluster, np *pb.NodePool,
 	}, cfg); err != nil {
 		return fmt.Errorf("provision: stage %s: %w", h.GetMac(), err)
 	}
-	return r.setHostState(cl.GetName(), h.GetMac(), pb.HostState_HOST_STATE_PROVISIONING, "staged; awaiting boot + join")
+	return r.startProvisioning(cl.GetName(), h.GetMac())
+}
+
+// startProvisioning transitions a host to Provisioning and stamps the start time
+// (the deadline for the join-timeout). Time enters here at the edge of a stage.
+func (r *Reconciler) startProvisioning(cluster, mac string) error {
+	h, rev, err := r.store.GetHost(cluster, mac)
+	if err != nil || h == nil {
+		return fmt.Errorf("provision: reload host %s: %w", mac, err)
+	}
+	h.State = pb.HostState_HOST_STATE_PROVISIONING
+	h.Message = "staged; awaiting boot + join"
+	h.ProvisioningStartedAt = time.Now().UTC().Format(time.RFC3339)
+	_, err = r.store.PutHostDesired(h, rev)
+	return err
+}
+
+// timedOut reports whether a Provisioning host has exceeded the provision
+// timeout. A missing/invalid start time is treated as not-timed-out (lenient).
+func (r *Reconciler) timedOut(h *pb.Host) bool {
+	ts := h.GetProvisioningStartedAt()
+	if ts == "" {
+		return false
+	}
+	started, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return false
+	}
+	return time.Since(started) > r.provisionTimeout
 }
 
 // bind records a joined node: Host → Ready (+addr), a Machine is created, and the

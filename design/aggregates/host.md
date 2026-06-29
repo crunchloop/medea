@@ -85,11 +85,15 @@ skipped (the reconciler goes straight to `Provisioning` when it stages).
   secrets bundle is extracted from a live control-plane config into the
   `CredentialStore` (`provisioning-plane.md` §5), ready for v2-M2 join-config
   generation.
-- **Driven states (v2-M4 adds scale-in):** `Ready` → (drain → unstage → drop
-  Machine+member) → `Registered` (released, Available for reuse) when `replicas`
-  drops below the Ready count. The serve-loop executor (`provision.Executor`,
-  `serve --provisioning`) now runs the reconciler on an interval.
-- **Known gaps:** a provision-timeout→`Failed` transition (a stuck Provisioning
-  host currently parks, visible via `host list`); `Allocated` still skipped; the
-  full netboot end-to-end (real Matchbox + node boot) is validated on the
-  Linux-QEMU / Beelink tier (`provisioning-plane.md` §12).
+- **Driven states (v2-M4 adds scale-in + timeout):** `Ready` → (drain → unstage →
+  drop Machine+member) → `Registered` (released, Available) when `replicas` drops
+  below the Ready count; `Provisioning` → `Failed` when the node doesn't join
+  within `--provision-timeout` (start time stamped in `provisioning_started_at`).
+  A `Failed` host **halts the pool** — the reconciler won't provision more until
+  the operator clears it (deregister), mirroring rollout halt-on-failure. The
+  serve-loop executor (`provision.Executor`, `serve --provisioning`) runs the
+  reconciler on an interval.
+- **Known gaps:** `Allocated` is still skipped (stage goes Registered→
+  Provisioning); clearing a `Failed` host is deregister-then-register (no reset
+  verb yet); the full netboot end-to-end (real Matchbox + node boot) is validated
+  on the Linux-QEMU / Beelink tier (`provisioning-plane.md` §12).

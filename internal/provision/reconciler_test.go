@@ -79,7 +79,7 @@ func seedProv(t *testing.T, st *store.BoltStore, enabled bool, hostState pb.Host
 func newRec(t *testing.T, st *store.BoltStore, p Provisioner, k KubeOps) *Reconciler {
 	return NewReconciler(st, p, fakeResolver{id: "schem123"}, k,
 		func(string) (*secrets.Bundle, error) { return testBundle(t), nil },
-		"factory.talos.dev", "/dev/sda")
+		"factory.talos.dev", "/dev/sda", 0)
 }
 
 // Only the control-plane node exists yet — no worker has joined.
@@ -229,5 +229,47 @@ func TestReconcileScaleIn(t *testing.T) {
 	// The other host is untouched.
 	if h2, _, _ := st.GetHost("home", "cc:dd"); h2.GetState() != pb.HostState_HOST_STATE_READY {
 		t.Fatalf("non-victim changed: %+v", h2)
+	}
+}
+
+func TestReconcileProvisionTimeoutHalts(t *testing.T) {
+	st := provStore(t)
+	if _, err := st.PutClusterDesired(&pb.Cluster{
+		Name: "home", Desired: &pb.ClusterDesired{TalosVersion: "v1.13.5"},
+		Endpoints: &pb.ClusterEndpoints{Kube: "10.5.0.2:6443"}, ProvisioningEnabled: true,
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.PutNodePoolDesired(&pb.NodePool{
+		Cluster: "home", Name: "workers", Role: pb.Role_ROLE_WORKER, Replicas: 1,
+		Selector: map[string]string{"role": "worker"},
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	// A host stuck in Provisioning since well past the default timeout.
+	if _, err := st.PutHostDesired(&pb.Host{
+		Cluster: "home", Mac: "aa:bb", Pool: "workers", Role: pb.Role_ROLE_WORKER,
+		Labels: map[string]string{"role": "worker"}, State: pb.HostState_HOST_STATE_PROVISIONING,
+		ProvisioningStartedAt: time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339),
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+	// An available host that must NOT be staged while a Failed host is present.
+	if _, err := st.PutHostDesired(&pb.Host{
+		Cluster: "home", Mac: "cc:dd", Pool: "workers", Role: pb.Role_ROLE_WORKER,
+		Labels: map[string]string{"role": "worker"}, State: pb.HostState_HOST_STATE_REGISTERED,
+	}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &fakeProv{}
+	if err := newRec(t, st, p, cpOnly()).ReconcilePool(context.Background(), "home", "workers"); err != nil {
+		t.Fatal(err)
+	}
+	if h, _, _ := st.GetHost("home", "aa:bb"); h.GetState() != pb.HostState_HOST_STATE_FAILED {
+		t.Fatalf("stuck host not failed: %+v", h)
+	}
+	if len(p.staged) != 0 {
+		t.Fatalf("halt-on-failure violated: staged %v while a Failed host is present", p.staged)
 	}
 }
