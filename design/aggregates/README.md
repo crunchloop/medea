@@ -22,8 +22,9 @@ code wins.
 | **Cluster** | Cluster Inventory | `pb.Cluster` | one record per `cluster` | desired is precious/CAS; observed is in-memory only; `rolloutsEnabled` never set by seed | [`cluster.md`](cluster.md) |
 | **NodePool** | Cluster Inventory | `pb.NodePool` | one record per `cluster/pool` | `desired.talosVersion == ""` inherits the cluster; strategy carries the safety knobs | [`nodepool.md`](nodepool.md) |
 | **Machine** | Cluster Inventory | `pb.Machine` | one record per `cluster/addr` | identity = Talos endpoint; observed never persisted | [`machine.md`](machine.md) |
+| **Host** | Cluster Inventory | `pb.Host` | one record per `cluster/mac` | identity = NIC MAC; pre-cluster provisioning inventory; v2-M1 ships register/list (state = `Registered`) | [`host.md`](host.md) |
 
-All six load-bearing aggregates are documented. `cluster-rollout.md` describes a
+All load-bearing aggregates are documented. `cluster-rollout.md` describes a
 **deferred** (M3) aggregate — type and storage exist, no reconciler drives it
 yet — and is marked as such throughout.
 

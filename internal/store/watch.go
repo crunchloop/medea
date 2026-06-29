@@ -121,6 +121,16 @@ func (s *BoltStore) snapshotEvents(since, upto Revision) ([]Event, error) {
 		}); err != nil {
 			return err
 		}
+		if err := des.Bucket(sHosts).ForEach(func(_, v []byte) error {
+			h := &pb.Host{}
+			if err := proto.Unmarshal(v, h); err != nil {
+				return err
+			}
+			add(KindHost, h.Cluster+"/"+h.Mac, Revision(h.Revision))
+			return nil
+		}); err != nil {
+			return err
+		}
 		rol := tx.Bucket(bRollouts)
 		if err := rol.Bucket(sMachines).ForEach(func(_, v []byte) error {
 			r := &pb.MachineRollout{}
@@ -164,6 +174,7 @@ type exportDoc struct {
 	Clusters  []json.RawMessage `json:"clusters"`
 	NodePools []json.RawMessage `json:"nodePools"`
 	Machines  []json.RawMessage `json:"machines"`
+	Hosts     []json.RawMessage `json:"hosts"`
 }
 
 // Export writes the desired state as a human-readable JSON document.
@@ -202,6 +213,17 @@ func (s *BoltStore) Export(w io.Writer) error {
 				return err
 			}
 			doc.Machines = append(doc.Machines, raw)
+		}
+		hs, err := s.ListHosts(c.Name, "")
+		if err != nil {
+			return err
+		}
+		for _, h := range hs {
+			raw, err := protojson.Marshal(h)
+			if err != nil {
+				return err
+			}
+			doc.Hosts = append(doc.Hosts, raw)
 		}
 	}
 	enc := json.NewEncoder(w)
@@ -252,6 +274,19 @@ func (s *BoltStore) Import(r io.Reader) error {
 			return err
 		}
 		if _, err := s.PutMachineDesired(m, rev); err != nil {
+			return err
+		}
+	}
+	for _, raw := range doc.Hosts {
+		h := &pb.Host{}
+		if err := protojson.Unmarshal(raw, h); err != nil {
+			return err
+		}
+		_, rev, err := s.GetHost(h.Cluster, h.Mac)
+		if err != nil {
+			return err
+		}
+		if _, err := s.PutHostDesired(h, rev); err != nil {
 			return err
 		}
 	}

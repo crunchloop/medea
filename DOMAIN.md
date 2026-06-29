@@ -32,7 +32,7 @@ any DDD pattern — the mapping is the point.
 | DDD concept | Textbook form | **How Medea does it (and why)** |
 | --- | --- | --- |
 | **Domain model** | Rich entities with behavior | **Anemic by design.** Aggregates are protobuf messages in [`gen/medea/v1`](gen/medea/v1) — pure data + getters, no methods. One `.proto` is the single source of type truth for the API, the store (proto wire bytes are the stored value), and the CLI (`design/datastore.md` §4). Behavior lives in *services*, never on the data. **Do not add methods to the proto types or wrap them in hand-written "rich" structs.** |
-| **Aggregate** | Cluster of objects with one root | A **single record** keyed in the store (`Cluster`, `NodePool`, `Machine`, `Rollout`, `MachineRollout`, `ClusterRollout`). The consistency boundary is one record / one write. There is no multi-record transaction; cross-record consistency is eventual, driven by reconcile. |
+| **Aggregate** | Cluster of objects with one root | A **single record** keyed in the store (`Cluster`, `NodePool`, `Machine`, `Host`, `Rollout`, `MachineRollout`, `ClusterRollout`). The consistency boundary is one record / one write. There is no multi-record transaction; cross-record consistency is eventual, driven by reconcile. |
 | **Repository** | Interface returning aggregates | [`store.Store`](internal/store) — a typed, per-resource surface (`GetCluster`, `PutNodePoolDesired`, `ListRolloutJobs`, …) over bbolt. Map "repository" → `store.Store`. The bbolt mechanics (buckets, revisions, watch) are platform; the interface is the domain seam. |
 | **Application service** | Orchestrates a use case | The gRPC handlers in [`server`](internal/server) — intent verbs (`SetClusterVersions`, `CreateRollout`, `EnableRollouts`), server-side read-modify-write, invariant enforcement at the boundary. |
 | **Domain service** | Stateless domain logic | The **reconcilers**: [`rollout.Reconciler`](internal/rollout) (per-node OS-upgrade state machine) and [`rollout.Executor`](internal/rollout) (job driver). The reconcile loop is the universal skeleton (PRD §8.2). |
@@ -90,7 +90,7 @@ are shared infrastructure.
 | Context | Type | Modules (packages) | Aggregates / responsibility |
 | --- | --- | --- | --- |
 | **Version Rollout** | **Core domain** | [`rollout`](internal/rollout); the rollout/safety handlers in [`server`](internal/server) (`CreateRollout`, `EnableRollouts`, `DisableRollouts`, `PauseRollout`, `ResumeRollout`, `ListRollouts`, `GetRollout`) | `Rollout` (job), `MachineRollout` (per-node execution), `ClusterRollout` (K8s-upgrade phase). The reason Medea exists: safe, observable version rollouts with the safety model baked in. |
-| **Cluster Inventory** | Supporting | [`seed`](internal/seed), [`refresh`](internal/refresh); the inventory handlers in [`server`](internal/server) (`GetCluster`, `ListClusters`, `ListNodePools`, `ListMachines`, `SetClusterVersions`, `SetNodePoolVersion`) | `Cluster`, `NodePool`, `Machine`. The registry of what clusters/pools/nodes exist, their desired versions, and their observed reality. Seeding bootstraps it; refresh projects observed onto it. |
+| **Cluster Inventory** | Supporting | [`seed`](internal/seed), [`refresh`](internal/refresh); the inventory handlers in [`server`](internal/server) (`GetCluster`, `ListClusters`, `ListNodePools`, `ListMachines`, `SetClusterVersions`, `SetNodePoolVersion`, `RegisterHost`, `ListHosts`, `DeregisterHost`) | `Cluster`, `NodePool`, `Machine`, `Host`. The registry of what clusters/pools/nodes/bare-metal-hosts exist, their desired versions, and their observed reality. Seeding bootstraps it; refresh projects observed onto it. (`Host` is the v2 provisioning-inventory aggregate; v2-M1 ships register/list, the lifecycle reconciler lands in v2-M3.) |
 | **Persistence + Shared Kernel** | Generic / kernel | [`store`](internal/store) (impl); [`gen/medea/v1`](gen/medea/v1) (kernel types) | The repository, optimistic concurrency, desired-state export, and the domain-event broadcaster. The proto types are the shared kernel every context speaks. |
 | **Talos Integration** | Generic subdomain | [`talos`](internal/talos) | ACL over Talos `machinery` (`Version`, `UpgradeOS`, `EtcdSnapshot`) + installer-image/schematic derivation. *Note:* `DeriveInstallerImage` (preserve-schematic, bump-version) is genuine domain logic that lives here for cohesion (`design/talos-client.md` §3). |
 | **Kubernetes Integration** | Generic subdomain | [`kube`](internal/kube) | ACL over `client-go` (`ListNodes`, `Drain`, `Cordon`/`Uncordon`, `NodeReady`, `KubeletVersion`). Outward client only — never in-cluster (PRD §8). |
@@ -124,7 +124,8 @@ docs.
 | Term | Meaning |
 | --- | --- |
 | **Cluster** | A managed Talos Kubernetes cluster. Aggregate root holding desired versions, endpoints, `mode`, and the `rolloutsEnabled` guard. |
-| **NodePool** | A group of like nodes (`controlplane` or `workers`). Holds membership, the rollout `strategy`, the pool-level desired Talos version, and `paused`. The managed-node-group abstraction. |
+| **NodePool** | A group of like nodes (`controlplane` or `workers`). Holds membership, the rollout `strategy`, the pool-level desired Talos version, and `paused`. The managed-node-group abstraction. v2 adds `replicas` + `selector` (reconciler-managed membership); `replicas == 0` + an explicit `members` list = the v1 behavior. |
+| **Host** | A piece of bare metal Medea knows about *before* it is a cluster member — the v2 provisioning inventory. Identity = NIC MAC. Holds the owning pool, `labels` (matched by `NodePool.selector`), and a lifecycle `state`. v2-M1 only registers them (`Registered`); the provisioning reconciler drives the rest. |
 | **Machine** | One node. Identity is its **Talos endpoint** (an address). Holds role + observed phase/versions/health. Mostly reconciler/refresh-owned. |
 | **Desired state** | The precious, operator-set intent (target versions, membership, strategy). Persisted; only exists in Medea; written via CAS. |
 | **Observed state** | The current reality (versions, health, readiness) re-read from the live cluster. A rebuildable in-memory cache, never persisted, never trusted as truth. |
@@ -195,6 +196,7 @@ surfaced over the wire as `WatchEvent`). They notify; consumers re-fetch.
 | `cluster` | A `Cluster` desired record is written (incl. `enable/disable-rollouts`) | Cluster Inventory (API) |
 | `nodepool` | A `NodePool` desired record is written (versions, `paused`) | Cluster Inventory (API) |
 | `machine` | A `Machine` identity record is written (seeding) | Cluster Inventory (seed) |
+| `host` | A `Host` inventory record is written/removed (register/deregister; later the provisioning reconciler) | Cluster Inventory (API; later provisioning reconciler) |
 | `machine_rollout` | A node's `MachineRollout` progress transitions | Version Rollout (reconciler) |
 | `cluster_rollout` | A `ClusterRollout` phase transitions (K8s path) | Version Rollout (reconciler) |
 | `rollout_job` | A `Rollout` job is created or changes state | Version Rollout (API + executor) |

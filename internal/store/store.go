@@ -34,6 +34,7 @@ const (
 	KindCluster        EventKind = "cluster"
 	KindNodePool       EventKind = "nodepool"
 	KindMachine        EventKind = "machine"
+	KindHost           EventKind = "host"
 	KindMachineRollout EventKind = "machine_rollout"
 	KindClusterRollout EventKind = "cluster_rollout"
 	KindRolloutJob     EventKind = "rollout_job"
@@ -55,6 +56,7 @@ var (
 	sClusters = []byte("clusters")
 	sNodePool = []byte("nodepools")
 	sMachines = []byte("machines")
+	sHosts    = []byte("hosts")
 	sJobs     = []byte("jobs")
 
 	kRevision = []byte("revision")
@@ -76,6 +78,11 @@ type Store interface {
 	GetMachine(cluster, addr string) (*pb.Machine, Revision, error)
 	ListMachines(cluster, pool string) ([]*pb.Machine, error)
 	PutMachineDesired(m *pb.Machine, expected Revision) (Revision, error)
+
+	GetHost(cluster, mac string) (*pb.Host, Revision, error)
+	ListHosts(cluster, pool string) ([]*pb.Host, error)
+	PutHostDesired(h *pb.Host, expected Revision) (Revision, error)
+	DeleteHost(cluster, mac string) error
 
 	GetMachineRollout(cluster, addr string) (*pb.MachineRollout, error)
 	PutMachineRollout(r *pb.MachineRollout) error
@@ -142,7 +149,7 @@ func Open(path string) (*BoltStore, error) {
 		if err != nil {
 			return err
 		}
-		for _, sub := range [][]byte{sClusters, sNodePool, sMachines} {
+		for _, sub := range [][]byte{sClusters, sNodePool, sMachines, sHosts} {
 			if _, err := des.CreateBucketIfNotExists(sub); err != nil {
 				return err
 			}
@@ -269,6 +276,8 @@ func marshalWithRev(msg proto.Message, rev Revision) ([]byte, error) {
 	case *pb.Machine:
 		m.Revision = uint64(rev)
 		m.Observed = nil
+	case *pb.Host:
+		m.Revision = uint64(rev)
 	case *pb.MachineRollout:
 		m.Revision = uint64(rev)
 	case *pb.ClusterRollout:
@@ -296,6 +305,8 @@ func decodeRevision(raw []byte, like proto.Message) (Revision, error) {
 	case *pb.NodePool:
 		return Revision(v.Revision), nil
 	case *pb.Machine:
+		return Revision(v.Revision), nil
+	case *pb.Host:
 		return Revision(v.Revision), nil
 	default:
 		return 0, fmt.Errorf("store: unsupported message %T", m)
@@ -443,6 +454,76 @@ func (s *BoltStore) PutMachineDesired(m *pb.Machine, expected Revision) (Revisio
 		return 0, errors.New("store: machine cluster and talos_endpoint required")
 	}
 	return s.putCAS(sMachines, ckey(m.Cluster, m.TalosEndpoint), expected, m, KindMachine, m.Cluster+"/"+m.TalosEndpoint)
+}
+
+// --- Host (provisioning inventory; desired/precious; CAS — provisioning-plane.md §2) ---
+
+func (s *BoltStore) GetHost(cluster, mac string) (*pb.Host, Revision, error) {
+	var h *pb.Host
+	err := s.db.View(func(tx *bolt.Tx) error {
+		raw := tx.Bucket(bDesired).Bucket(sHosts).Get(ckey(cluster, mac))
+		if raw == nil {
+			return nil
+		}
+		h = &pb.Host{}
+		return proto.Unmarshal(raw, h)
+	})
+	if err != nil || h == nil {
+		return nil, 0, err
+	}
+	return h, Revision(h.Revision), nil
+}
+
+func (s *BoltStore) ListHosts(cluster, pool string) ([]*pb.Host, error) {
+	var out []*pb.Host
+	prefix := []byte(cluster + "\x00")
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bDesired).Bucket(sHosts).ForEach(func(k, v []byte) error {
+			if !hasPrefix(k, prefix) {
+				return nil
+			}
+			h := &pb.Host{}
+			if err := proto.Unmarshal(v, h); err != nil {
+				return err
+			}
+			if pool != "" && h.GetPool() != pool {
+				return nil
+			}
+			out = append(out, h)
+			return nil
+		})
+	})
+	return out, err
+}
+
+func (s *BoltStore) PutHostDesired(h *pb.Host, expected Revision) (Revision, error) {
+	if h.GetCluster() == "" || h.GetMac() == "" {
+		return 0, errors.New("store: host cluster and mac required")
+	}
+	return s.putCAS(sHosts, ckey(h.Cluster, h.Mac), expected, h, KindHost, h.Cluster+"/"+h.Mac)
+}
+
+func (s *BoltStore) DeleteHost(cluster, mac string) error {
+	if cluster == "" || mac == "" {
+		return errors.New("store: host cluster and mac required")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	var newRev Revision
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		r, err := bumpRev(tx)
+		if err != nil {
+			return err
+		}
+		newRev = r
+		return tx.Bucket(bDesired).Bucket(sHosts).Delete(ckey(cluster, mac))
+	})
+	if err != nil {
+		return err
+	}
+	s.lastRev = newRev
+	s.publish(Event{Kind: KindHost, Key: cluster + "/" + mac, Revision: newRev})
+	return nil
 }
 
 // --- Rollouts (LWW) ---

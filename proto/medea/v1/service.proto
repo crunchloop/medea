@@ -15,6 +15,7 @@ service Medea {
   rpc ListClusters(ListClustersRequest) returns (ListClustersResponse);
   rpc ListNodePools(ListNodePoolsRequest) returns (ListNodePoolsResponse);
   rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse);
+  rpc ListHosts(ListHostsRequest) returns (ListHostsResponse);
   rpc GetRollout(GetRolloutRequest) returns (GetRolloutResponse);
 
   // --- desired-state mutations (intent verbs; server-side read-modify-write) ---
@@ -28,6 +29,10 @@ service Medea {
   rpc DisableRollouts(EnableRolloutsRequest) returns (Cluster);
   rpc CreateRollout(CreateRolloutRequest) returns (Rollout);
   rpc ListRollouts(ListRolloutsRequest) returns (ListRolloutsResponse);
+
+  // --- provisioning inventory (v2, design/provisioning-plane.md) ---
+  rpc RegisterHost(RegisterHostRequest) returns (Host);
+  rpc DeregisterHost(DeregisterHostRequest) returns (DeregisterHostResponse);
 
   // --- watch ---
   rpc Watch(WatchRequest) returns (stream WatchEvent);
@@ -59,6 +64,30 @@ message ListMachinesRequest {
 message ListMachinesResponse {
   repeated Machine machines = 1;
 }
+
+message ListHostsRequest {
+  string cluster = 1;
+  string pool = 2; // optional filter
+}
+
+message ListHostsResponse {
+  repeated Host hosts = 1;
+}
+
+message RegisterHostRequest {
+  string cluster = 1;
+  string mac = 2;
+  string pool = 3;                 // optional; the pool this host joins when provisioned
+  Role role = 4;                   // optional; defaults to the pool's role
+  map<string, string> labels = 5;  // matched by NodePool.selector
+}
+
+message DeregisterHostRequest {
+  string cluster = 1;
+  string mac = 2;
+}
+
+message DeregisterHostResponse {}
 
 message GetRolloutRequest {
   string cluster = 1;

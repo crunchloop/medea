@@ -419,6 +419,89 @@ func (s *Server) ListRollouts(_ context.Context, req *pb.ListRolloutsRequest) (*
 	return &pb.ListRolloutsResponse{Rollouts: jobs}, nil
 }
 
+// --- provisioning inventory (v2, design/provisioning-plane.md) ---
+
+func (s *Server) ListHosts(_ context.Context, req *pb.ListHostsRequest) (*pb.ListHostsResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	hs, err := s.store.ListHosts(req.GetCluster(), req.GetPool())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.ListHostsResponse{Hosts: hs}, nil
+}
+
+// RegisterHost records a bare-metal host (by MAC) in the inventory as
+// REGISTERED. It is an upsert: re-registering updates pool/role/labels but
+// preserves a lifecycle state already advanced by the (future) provisioning
+// reconciler. v2-M1 only registers — nothing is provisioned yet.
+func (s *Server) RegisterHost(_ context.Context, req *pb.RegisterHostRequest) (*pb.Host, error) {
+	if req.GetCluster() == "" || req.GetMac() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster and mac required")
+	}
+	c, _, err := s.store.GetCluster(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if c == nil {
+		return nil, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+	}
+	role := req.GetRole()
+	if req.GetPool() != "" {
+		np, _, err := s.store.GetNodePool(req.GetCluster(), req.GetPool())
+		if err != nil {
+			return nil, mapErr(err)
+		}
+		if np == nil {
+			return nil, status.Errorf(codes.NotFound, "nodepool %q/%q not found", req.GetCluster(), req.GetPool())
+		}
+		if role == pb.Role_ROLE_UNSPECIFIED {
+			role = np.GetRole()
+		}
+	}
+
+	var saved *pb.Host
+	if _, err := rmw(func() (store.Revision, error) {
+		cur, rev, err := s.store.GetHost(req.GetCluster(), req.GetMac())
+		if err != nil {
+			return 0, err
+		}
+		h := &pb.Host{
+			Cluster: req.GetCluster(),
+			Mac:     req.GetMac(),
+			Pool:    req.GetPool(),
+			Role:    role,
+			Labels:  req.GetLabels(),
+			State:   pb.HostState_HOST_STATE_REGISTERED,
+		}
+		if cur != nil && cur.GetState() != pb.HostState_HOST_STATE_UNSPECIFIED {
+			h.State = cur.GetState() // preserve a reconciler-advanced lifecycle state
+			h.Addr = cur.GetAddr()
+		}
+		nr, err := s.store.PutHostDesired(h, rev)
+		if err != nil {
+			return 0, err
+		}
+		h.Revision = uint64(nr)
+		saved = h
+		return nr, nil
+	}, 0); err != nil {
+		return nil, err
+	}
+	return saved, nil
+}
+
+func (s *Server) DeregisterHost(_ context.Context, req *pb.DeregisterHostRequest) (*pb.DeregisterHostResponse, error) {
+	if req.GetCluster() == "" || req.GetMac() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster and mac required")
+	}
+	if err := s.store.DeleteHost(req.GetCluster(), req.GetMac()); err != nil {
+		return nil, mapErr(err)
+	}
+	return &pb.DeregisterHostResponse{}, nil
+}
+
 // --- watch ---
 
 func (s *Server) Watch(req *pb.WatchRequest, stream pb.Medea_WatchServer) error {

@@ -276,6 +276,61 @@ func TestExportImportRoundTripNoCredsNoObserved(t *testing.T) {
 	}
 }
 
+func TestHostRoundTripCASListDelete(t *testing.T) {
+	s := openTemp(t)
+	h := &pb.Host{Cluster: "home", Mac: "aa:bb", Pool: "workers", Role: pb.Role_ROLE_WORKER,
+		State: pb.HostState_HOST_STATE_REGISTERED, Labels: map[string]string{"role": "worker"}}
+	rev, err := s.PutHostDesired(h, 0)
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if _, err := s.PutHostDesired(h, 0); err != ErrConflict {
+		t.Fatalf("stale CAS err = %v, want ErrConflict", err)
+	}
+	got, grev, err := s.GetHost("home", "aa:bb")
+	if err != nil || got == nil || grev != rev || got.GetPool() != "workers" || got.GetLabels()["role"] != "worker" {
+		t.Fatalf("get host wrong: %+v rev=%d err=%v", got, grev, err)
+	}
+	if _, err := s.PutHostDesired(&pb.Host{Cluster: "home", Mac: "cc:dd", Pool: "controlplane", Role: pb.Role_ROLE_CONTROLPLANE}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := s.ListHosts("home", ""); len(all) != 2 {
+		t.Fatalf("list all = %d, want 2", len(all))
+	}
+	if workers, _ := s.ListHosts("home", "workers"); len(workers) != 1 || workers[0].GetMac() != "aa:bb" {
+		t.Fatalf("list workers wrong: %+v", workers)
+	}
+	if err := s.DeleteHost("home", "aa:bb"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.GetHost("home", "aa:bb"); got != nil {
+		t.Fatalf("host still present after delete: %+v", got)
+	}
+}
+
+func TestExportImportIncludesHosts(t *testing.T) {
+	s := openTemp(t)
+	if _, err := s.PutClusterDesired(cluster("home", "v1.36.1"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutHostDesired(&pb.Host{Cluster: "home", Mac: "aa:bb", Pool: "workers",
+		Role: pb.Role_ROLE_WORKER, State: pb.HostState_HOST_STATE_REGISTERED}, 0); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := s.Export(&buf); err != nil {
+		t.Fatal(err)
+	}
+	s2 := openTemp(t)
+	if err := s2.Import(bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatal(err)
+	}
+	hs, _ := s2.ListHosts("home", "")
+	if len(hs) != 1 || hs[0].GetMac() != "aa:bb" || hs[0].GetState() != pb.HostState_HOST_STATE_REGISTERED {
+		t.Fatalf("imported host wrong: %+v", hs)
+	}
+}
+
 func rollout(c string) *pb.ClusterRollout {
 	return &pb.ClusterRollout{Cluster: c, Phase: pb.ClusterRolloutPhase_CLUSTER_ROLLOUT_PHASE_UPGRADING, TargetKubernetesVersion: "v1.36.2"}
 }

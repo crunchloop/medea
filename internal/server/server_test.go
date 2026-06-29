@@ -305,6 +305,63 @@ func TestCreateK8sRolloutRejectsPool(t *testing.T) {
 	}
 }
 
+func TestRegisterListDeregisterHost(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1")
+	seedPoolFor(t, st, "home", "workers")
+
+	// Register: role defaults from the pool; state is REGISTERED.
+	h, err := c.RegisterHost(ctx, &pb.RegisterHostRequest{
+		Cluster: "home", Mac: "aa:bb:cc", Pool: "workers", Labels: map[string]string{"disk": "nvme"},
+	})
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if h.GetState() != pb.HostState_HOST_STATE_REGISTERED || h.GetRole() != pb.Role_ROLE_WORKER {
+		t.Fatalf("host wrong: %+v", h)
+	}
+
+	// List.
+	resp, err := c.ListHosts(ctx, &pb.ListHostsRequest{Cluster: "home"})
+	if err != nil || len(resp.GetHosts()) != 1 || resp.GetHosts()[0].GetMac() != "aa:bb:cc" {
+		t.Fatalf("list wrong: %v / %+v", err, resp.GetHosts())
+	}
+
+	// Re-register preserves a reconciler-advanced lifecycle state.
+	if _, err := st.PutHostDesired(&pb.Host{Cluster: "home", Mac: "aa:bb:cc", Pool: "workers",
+		Role: pb.Role_ROLE_WORKER, State: pb.HostState_HOST_STATE_READY}, store.Revision(resp.GetHosts()[0].GetRevision())); err != nil {
+		t.Fatal(err)
+	}
+	h2, err := c.RegisterHost(ctx, &pb.RegisterHostRequest{Cluster: "home", Mac: "aa:bb:cc", Pool: "workers"})
+	if err != nil {
+		t.Fatalf("re-register: %v", err)
+	}
+	if h2.GetState() != pb.HostState_HOST_STATE_READY {
+		t.Fatalf("re-register clobbered lifecycle state: %v", h2.GetState())
+	}
+
+	// Deregister.
+	if _, err := c.DeregisterHost(ctx, &pb.DeregisterHostRequest{Cluster: "home", Mac: "aa:bb:cc"}); err != nil {
+		t.Fatalf("deregister: %v", err)
+	}
+	resp, _ = c.ListHosts(ctx, &pb.ListHostsRequest{Cluster: "home"})
+	if len(resp.GetHosts()) != 0 {
+		t.Fatalf("host present after deregister: %+v", resp.GetHosts())
+	}
+}
+
+func TestRegisterHostUnknownCluster(t *testing.T) {
+	ctx := context.Background()
+	c, _ := newClient(t, serverToken)
+	if _, err := c.RegisterHost(ctx, &pb.RegisterHostRequest{Cluster: "ghost", Mac: "aa:bb"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown cluster: code=%v, want NotFound", status.Code(err))
+	}
+	if _, err := c.RegisterHost(ctx, &pb.RegisterHostRequest{Cluster: "ghost"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("missing mac: code=%v, want InvalidArgument", status.Code(err))
+	}
+}
+
 func TestWatchSnapshotThenLive(t *testing.T) {
 	c, st := newClient(t, serverToken)
 	seedCluster(t, st, "home", "v1.36.1") // revision 1

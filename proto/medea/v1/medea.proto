@@ -63,10 +63,45 @@ message NodePool {
   RolloutStrategy strategy = 6;
   bool paused = 7;
   uint64 revision = 8;
+  // Provisioning (v2, design/provisioning-plane.md §2). replicas == 0 + a
+  // non-empty members list = v1 "manage these exact addresses" behavior; a pool
+  // opts into provisioning by setting replicas + selector, and members becomes
+  // reconciler-managed.
+  uint32 replicas = 9;
+  map<string, string> selector = 10; // matched against Host.labels
 }
 
 message NodePoolDesired {
   string talos_version = 1;  // "" = inherit Cluster.desired.talos_version
+}
+
+// ---------------------------------------------------------------------------
+// Host — a piece of bare metal Medea knows about *before* it is a cluster
+// member: the provisioning-plane inventory (design/provisioning-plane.md §2).
+// Cluster Inventory aggregate; identity = NIC MAC (Matchbox keys on it).
+// v2-M1 only registers Hosts (state REGISTERED); the provisioning reconciler
+// (v2-M3) drives the rest of the lifecycle.
+// ---------------------------------------------------------------------------
+message Host {
+  string cluster = 1;
+  string mac = 2;                  // identity within a cluster
+  string pool = 3;                 // owning pool once allocated
+  map<string, string> labels = 4;  // matched by NodePool.selector
+  string addr = 5;                 // observed Talos endpoint once it joins
+  Role role = 6;
+  HostState state = 7;
+  string message = 8;
+  uint64 revision = 9;
+}
+
+enum HostState {
+  HOST_STATE_UNSPECIFIED = 0;
+  HOST_STATE_REGISTERED = 1;     // known; not yet allocated to a pool
+  HOST_STATE_ALLOCATED = 2;      // bound to a pool to satisfy replicas
+  HOST_STATE_PROVISIONING = 3;   // staged in Matchbox; awaiting PXE boot + join
+  HOST_STATE_READY = 4;          // joined + healthy; a Machine is bound
+  HOST_STATE_FAILED = 5;         // provision did not converge (halt)
+  HOST_STATE_DEPROVISIONING = 6; // releasing / replacing
 }
 
 message RolloutStrategy {

@@ -27,6 +27,7 @@ const (
 	Medea_ListClusters_FullMethodName       = "/medea.v1.Medea/ListClusters"
 	Medea_ListNodePools_FullMethodName      = "/medea.v1.Medea/ListNodePools"
 	Medea_ListMachines_FullMethodName       = "/medea.v1.Medea/ListMachines"
+	Medea_ListHosts_FullMethodName          = "/medea.v1.Medea/ListHosts"
 	Medea_GetRollout_FullMethodName         = "/medea.v1.Medea/GetRollout"
 	Medea_SetClusterVersions_FullMethodName = "/medea.v1.Medea/SetClusterVersions"
 	Medea_SetNodePoolVersion_FullMethodName = "/medea.v1.Medea/SetNodePoolVersion"
@@ -36,6 +37,8 @@ const (
 	Medea_DisableRollouts_FullMethodName    = "/medea.v1.Medea/DisableRollouts"
 	Medea_CreateRollout_FullMethodName      = "/medea.v1.Medea/CreateRollout"
 	Medea_ListRollouts_FullMethodName       = "/medea.v1.Medea/ListRollouts"
+	Medea_RegisterHost_FullMethodName       = "/medea.v1.Medea/RegisterHost"
+	Medea_DeregisterHost_FullMethodName     = "/medea.v1.Medea/DeregisterHost"
 	Medea_Watch_FullMethodName              = "/medea.v1.Medea/Watch"
 )
 
@@ -48,6 +51,7 @@ type MedeaClient interface {
 	ListClusters(ctx context.Context, in *ListClustersRequest, opts ...grpc.CallOption) (*ListClustersResponse, error)
 	ListNodePools(ctx context.Context, in *ListNodePoolsRequest, opts ...grpc.CallOption) (*ListNodePoolsResponse, error)
 	ListMachines(ctx context.Context, in *ListMachinesRequest, opts ...grpc.CallOption) (*ListMachinesResponse, error)
+	ListHosts(ctx context.Context, in *ListHostsRequest, opts ...grpc.CallOption) (*ListHostsResponse, error)
 	GetRollout(ctx context.Context, in *GetRolloutRequest, opts ...grpc.CallOption) (*GetRolloutResponse, error)
 	// --- desired-state mutations (intent verbs; server-side read-modify-write) ---
 	SetClusterVersions(ctx context.Context, in *SetClusterVersionsRequest, opts ...grpc.CallOption) (*SetVersionsResponse, error)
@@ -59,6 +63,9 @@ type MedeaClient interface {
 	DisableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error)
 	CreateRollout(ctx context.Context, in *CreateRolloutRequest, opts ...grpc.CallOption) (*Rollout, error)
 	ListRollouts(ctx context.Context, in *ListRolloutsRequest, opts ...grpc.CallOption) (*ListRolloutsResponse, error)
+	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
+	RegisterHost(ctx context.Context, in *RegisterHostRequest, opts ...grpc.CallOption) (*Host, error)
+	DeregisterHost(ctx context.Context, in *DeregisterHostRequest, opts ...grpc.CallOption) (*DeregisterHostResponse, error)
 	// --- watch ---
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
@@ -105,6 +112,16 @@ func (c *medeaClient) ListMachines(ctx context.Context, in *ListMachinesRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListMachinesResponse)
 	err := c.cc.Invoke(ctx, Medea_ListMachines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) ListHosts(ctx context.Context, in *ListHostsRequest, opts ...grpc.CallOption) (*ListHostsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHostsResponse)
+	err := c.cc.Invoke(ctx, Medea_ListHosts_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +218,26 @@ func (c *medeaClient) ListRollouts(ctx context.Context, in *ListRolloutsRequest,
 	return out, nil
 }
 
+func (c *medeaClient) RegisterHost(ctx context.Context, in *RegisterHostRequest, opts ...grpc.CallOption) (*Host, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Host)
+	err := c.cc.Invoke(ctx, Medea_RegisterHost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) DeregisterHost(ctx context.Context, in *DeregisterHostRequest, opts ...grpc.CallOption) (*DeregisterHostResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeregisterHostResponse)
+	err := c.cc.Invoke(ctx, Medea_DeregisterHost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *medeaClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Medea_ServiceDesc.Streams[0], Medea_Watch_FullMethodName, cOpts...)
@@ -229,6 +266,7 @@ type MedeaServer interface {
 	ListClusters(context.Context, *ListClustersRequest) (*ListClustersResponse, error)
 	ListNodePools(context.Context, *ListNodePoolsRequest) (*ListNodePoolsResponse, error)
 	ListMachines(context.Context, *ListMachinesRequest) (*ListMachinesResponse, error)
+	ListHosts(context.Context, *ListHostsRequest) (*ListHostsResponse, error)
 	GetRollout(context.Context, *GetRolloutRequest) (*GetRolloutResponse, error)
 	// --- desired-state mutations (intent verbs; server-side read-modify-write) ---
 	SetClusterVersions(context.Context, *SetClusterVersionsRequest) (*SetVersionsResponse, error)
@@ -240,6 +278,9 @@ type MedeaServer interface {
 	DisableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error)
 	CreateRollout(context.Context, *CreateRolloutRequest) (*Rollout, error)
 	ListRollouts(context.Context, *ListRolloutsRequest) (*ListRolloutsResponse, error)
+	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
+	RegisterHost(context.Context, *RegisterHostRequest) (*Host, error)
+	DeregisterHost(context.Context, *DeregisterHostRequest) (*DeregisterHostResponse, error)
 	// --- watch ---
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedMedeaServer()
@@ -263,6 +304,9 @@ func (UnimplementedMedeaServer) ListNodePools(context.Context, *ListNodePoolsReq
 }
 func (UnimplementedMedeaServer) ListMachines(context.Context, *ListMachinesRequest) (*ListMachinesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMachines not implemented")
+}
+func (UnimplementedMedeaServer) ListHosts(context.Context, *ListHostsRequest) (*ListHostsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListHosts not implemented")
 }
 func (UnimplementedMedeaServer) GetRollout(context.Context, *GetRolloutRequest) (*GetRolloutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRollout not implemented")
@@ -290,6 +334,12 @@ func (UnimplementedMedeaServer) CreateRollout(context.Context, *CreateRolloutReq
 }
 func (UnimplementedMedeaServer) ListRollouts(context.Context, *ListRolloutsRequest) (*ListRolloutsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRollouts not implemented")
+}
+func (UnimplementedMedeaServer) RegisterHost(context.Context, *RegisterHostRequest) (*Host, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterHost not implemented")
+}
+func (UnimplementedMedeaServer) DeregisterHost(context.Context, *DeregisterHostRequest) (*DeregisterHostResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeregisterHost not implemented")
 }
 func (UnimplementedMedeaServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
@@ -383,6 +433,24 @@ func _Medea_ListMachines_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MedeaServer).ListMachines(ctx, req.(*ListMachinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_ListHosts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHostsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).ListHosts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_ListHosts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).ListHosts(ctx, req.(*ListHostsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -549,6 +617,42 @@ func _Medea_ListRollouts_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Medea_RegisterHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterHostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).RegisterHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_RegisterHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).RegisterHost(ctx, req.(*RegisterHostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_DeregisterHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeregisterHostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).DeregisterHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_DeregisterHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).DeregisterHost(ctx, req.(*DeregisterHostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Medea_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -582,6 +686,10 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMachines",
 			Handler:    _Medea_ListMachines_Handler,
+		},
+		{
+			MethodName: "ListHosts",
+			Handler:    _Medea_ListHosts_Handler,
 		},
 		{
 			MethodName: "GetRollout",
@@ -618,6 +726,14 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRollouts",
 			Handler:    _Medea_ListRollouts_Handler,
+		},
+		{
+			MethodName: "RegisterHost",
+			Handler:    _Medea_RegisterHost_Handler,
+		},
+		{
+			MethodName: "DeregisterHost",
+			Handler:    _Medea_DeregisterHost_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
