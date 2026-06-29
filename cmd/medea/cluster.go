@@ -23,7 +23,19 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		RunE:  func(_ *cobra.Command, args []string) error { return setRollouts(args[0], false) },
 	}
-	clusterCmd.AddCommand(enable, disable)
+	enableProv := &cobra.Command{
+		Use:   "enable-provisioning <cluster>",
+		Short: "Allow provisioning on a cluster (deliberate; off by default)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  func(_ *cobra.Command, args []string) error { return setProvisioning(args[0], true) },
+	}
+	disableProv := &cobra.Command{
+		Use:   "disable-provisioning <cluster>",
+		Short: "Disallow provisioning on a cluster",
+		Args:  cobra.ExactArgs(1),
+		RunE:  func(_ *cobra.Command, args []string) error { return setProvisioning(args[0], false) },
+	}
+	clusterCmd.AddCommand(enable, disable, enableProv, disableProv)
 	rootCmd.AddCommand(clusterCmd)
 }
 
@@ -46,5 +58,27 @@ func setRollouts(cluster string, enable bool) error {
 		return err
 	}
 	fmt.Printf("cluster %q: rollouts_enabled=%t\n", cl.GetName(), cl.GetRolloutsEnabled())
+	return nil
+}
+
+func setProvisioning(cluster string, enable bool) error {
+	c, closeFn, err := dial()
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	var cl *pb.Cluster
+	if enable {
+		cl, err = c.EnableProvisioning(ctx, &pb.EnableProvisioningRequest{Cluster: cluster})
+	} else {
+		cl, err = c.DisableProvisioning(ctx, &pb.EnableProvisioningRequest{Cluster: cluster})
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("cluster %q: provisioning_enabled=%t\n", cl.GetName(), cl.GetProvisioningEnabled())
 	return nil
 }

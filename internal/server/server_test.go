@@ -351,6 +351,24 @@ func TestRegisterListDeregisterHost(t *testing.T) {
 	}
 }
 
+func TestEnableDisableProvisioning(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+	seedCluster(t, st, "home", "v1.36.1")
+
+	cl, err := c.EnableProvisioning(ctx, &pb.EnableProvisioningRequest{Cluster: "home"})
+	if err != nil || !cl.GetProvisioningEnabled() {
+		t.Fatalf("enable: %v / enabled=%v", err, cl.GetProvisioningEnabled())
+	}
+	cl, err = c.DisableProvisioning(ctx, &pb.EnableProvisioningRequest{Cluster: "home"})
+	if err != nil || cl.GetProvisioningEnabled() {
+		t.Fatalf("disable: %v / enabled=%v", err, cl.GetProvisioningEnabled())
+	}
+	if _, err := c.EnableProvisioning(ctx, &pb.EnableProvisioningRequest{Cluster: "ghost"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown cluster: code=%v, want NotFound", status.Code(err))
+	}
+}
+
 func TestRegisterHostUnknownCluster(t *testing.T) {
 	ctx := context.Background()
 	c, _ := newClient(t, serverToken)

@@ -23,23 +23,25 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Medea_GetCluster_FullMethodName         = "/medea.v1.Medea/GetCluster"
-	Medea_ListClusters_FullMethodName       = "/medea.v1.Medea/ListClusters"
-	Medea_ListNodePools_FullMethodName      = "/medea.v1.Medea/ListNodePools"
-	Medea_ListMachines_FullMethodName       = "/medea.v1.Medea/ListMachines"
-	Medea_ListHosts_FullMethodName          = "/medea.v1.Medea/ListHosts"
-	Medea_GetRollout_FullMethodName         = "/medea.v1.Medea/GetRollout"
-	Medea_SetClusterVersions_FullMethodName = "/medea.v1.Medea/SetClusterVersions"
-	Medea_SetNodePoolVersion_FullMethodName = "/medea.v1.Medea/SetNodePoolVersion"
-	Medea_PauseRollout_FullMethodName       = "/medea.v1.Medea/PauseRollout"
-	Medea_ResumeRollout_FullMethodName      = "/medea.v1.Medea/ResumeRollout"
-	Medea_EnableRollouts_FullMethodName     = "/medea.v1.Medea/EnableRollouts"
-	Medea_DisableRollouts_FullMethodName    = "/medea.v1.Medea/DisableRollouts"
-	Medea_CreateRollout_FullMethodName      = "/medea.v1.Medea/CreateRollout"
-	Medea_ListRollouts_FullMethodName       = "/medea.v1.Medea/ListRollouts"
-	Medea_RegisterHost_FullMethodName       = "/medea.v1.Medea/RegisterHost"
-	Medea_DeregisterHost_FullMethodName     = "/medea.v1.Medea/DeregisterHost"
-	Medea_Watch_FullMethodName              = "/medea.v1.Medea/Watch"
+	Medea_GetCluster_FullMethodName          = "/medea.v1.Medea/GetCluster"
+	Medea_ListClusters_FullMethodName        = "/medea.v1.Medea/ListClusters"
+	Medea_ListNodePools_FullMethodName       = "/medea.v1.Medea/ListNodePools"
+	Medea_ListMachines_FullMethodName        = "/medea.v1.Medea/ListMachines"
+	Medea_ListHosts_FullMethodName           = "/medea.v1.Medea/ListHosts"
+	Medea_GetRollout_FullMethodName          = "/medea.v1.Medea/GetRollout"
+	Medea_SetClusterVersions_FullMethodName  = "/medea.v1.Medea/SetClusterVersions"
+	Medea_SetNodePoolVersion_FullMethodName  = "/medea.v1.Medea/SetNodePoolVersion"
+	Medea_PauseRollout_FullMethodName        = "/medea.v1.Medea/PauseRollout"
+	Medea_ResumeRollout_FullMethodName       = "/medea.v1.Medea/ResumeRollout"
+	Medea_EnableRollouts_FullMethodName      = "/medea.v1.Medea/EnableRollouts"
+	Medea_DisableRollouts_FullMethodName     = "/medea.v1.Medea/DisableRollouts"
+	Medea_EnableProvisioning_FullMethodName  = "/medea.v1.Medea/EnableProvisioning"
+	Medea_DisableProvisioning_FullMethodName = "/medea.v1.Medea/DisableProvisioning"
+	Medea_CreateRollout_FullMethodName       = "/medea.v1.Medea/CreateRollout"
+	Medea_ListRollouts_FullMethodName        = "/medea.v1.Medea/ListRollouts"
+	Medea_RegisterHost_FullMethodName        = "/medea.v1.Medea/RegisterHost"
+	Medea_DeregisterHost_FullMethodName      = "/medea.v1.Medea/DeregisterHost"
+	Medea_Watch_FullMethodName               = "/medea.v1.Medea/Watch"
 )
 
 // MedeaClient is the client API for Medea service.
@@ -61,6 +63,8 @@ type MedeaClient interface {
 	// --- rollout safety (design/rollout-safety.md) ---
 	EnableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error)
 	DisableRollouts(ctx context.Context, in *EnableRolloutsRequest, opts ...grpc.CallOption) (*Cluster, error)
+	EnableProvisioning(ctx context.Context, in *EnableProvisioningRequest, opts ...grpc.CallOption) (*Cluster, error)
+	DisableProvisioning(ctx context.Context, in *EnableProvisioningRequest, opts ...grpc.CallOption) (*Cluster, error)
 	CreateRollout(ctx context.Context, in *CreateRolloutRequest, opts ...grpc.CallOption) (*Rollout, error)
 	ListRollouts(ctx context.Context, in *ListRolloutsRequest, opts ...grpc.CallOption) (*ListRolloutsResponse, error)
 	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
@@ -198,6 +202,26 @@ func (c *medeaClient) DisableRollouts(ctx context.Context, in *EnableRolloutsReq
 	return out, nil
 }
 
+func (c *medeaClient) EnableProvisioning(ctx context.Context, in *EnableProvisioningRequest, opts ...grpc.CallOption) (*Cluster, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Cluster)
+	err := c.cc.Invoke(ctx, Medea_EnableProvisioning_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) DisableProvisioning(ctx context.Context, in *EnableProvisioningRequest, opts ...grpc.CallOption) (*Cluster, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Cluster)
+	err := c.cc.Invoke(ctx, Medea_DisableProvisioning_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *medeaClient) CreateRollout(ctx context.Context, in *CreateRolloutRequest, opts ...grpc.CallOption) (*Rollout, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Rollout)
@@ -276,6 +300,8 @@ type MedeaServer interface {
 	// --- rollout safety (design/rollout-safety.md) ---
 	EnableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error)
 	DisableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error)
+	EnableProvisioning(context.Context, *EnableProvisioningRequest) (*Cluster, error)
+	DisableProvisioning(context.Context, *EnableProvisioningRequest) (*Cluster, error)
 	CreateRollout(context.Context, *CreateRolloutRequest) (*Rollout, error)
 	ListRollouts(context.Context, *ListRolloutsRequest) (*ListRolloutsResponse, error)
 	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
@@ -328,6 +354,12 @@ func (UnimplementedMedeaServer) EnableRollouts(context.Context, *EnableRolloutsR
 }
 func (UnimplementedMedeaServer) DisableRollouts(context.Context, *EnableRolloutsRequest) (*Cluster, error) {
 	return nil, status.Error(codes.Unimplemented, "method DisableRollouts not implemented")
+}
+func (UnimplementedMedeaServer) EnableProvisioning(context.Context, *EnableProvisioningRequest) (*Cluster, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnableProvisioning not implemented")
+}
+func (UnimplementedMedeaServer) DisableProvisioning(context.Context, *EnableProvisioningRequest) (*Cluster, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisableProvisioning not implemented")
 }
 func (UnimplementedMedeaServer) CreateRollout(context.Context, *CreateRolloutRequest) (*Rollout, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateRollout not implemented")
@@ -581,6 +613,42 @@ func _Medea_DisableRollouts_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Medea_EnableProvisioning_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableProvisioningRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).EnableProvisioning(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_EnableProvisioning_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).EnableProvisioning(ctx, req.(*EnableProvisioningRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_DisableProvisioning_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableProvisioningRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).DisableProvisioning(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_DisableProvisioning_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).DisableProvisioning(ctx, req.(*EnableProvisioningRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Medea_CreateRollout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateRolloutRequest)
 	if err := dec(in); err != nil {
@@ -718,6 +786,14 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DisableRollouts",
 			Handler:    _Medea_DisableRollouts_Handler,
+		},
+		{
+			MethodName: "EnableProvisioning",
+			Handler:    _Medea_EnableProvisioning_Handler,
+		},
+		{
+			MethodName: "DisableProvisioning",
+			Handler:    _Medea_DisableProvisioning_Handler,
 		},
 		{
 			MethodName: "CreateRollout",

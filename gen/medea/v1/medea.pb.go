@@ -483,16 +483,17 @@ func (RolloutJobState) EnumDescriptor() ([]byte, []int) {
 // Cluster — cluster-wide desired + observed state. One per managed cluster.
 // ---------------------------------------------------------------------------
 type Cluster struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Name            string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Desired         *ClusterDesired        `protobuf:"bytes,2,opt,name=desired,proto3" json:"desired,omitempty"`   // precious; persisted
-	Observed        *ClusterObserved       `protobuf:"bytes,3,opt,name=observed,proto3" json:"observed,omitempty"` // cache; in-memory only (datastore.md §2)
-	Endpoints       *ClusterEndpoints      `protobuf:"bytes,4,opt,name=endpoints,proto3" json:"endpoints,omitempty"`
-	Revision        uint64                 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`                                      // last-write revision (datastore.md §4)
-	Mode            ClusterMode            `protobuf:"varint,6,opt,name=mode,proto3,enum=medea.v1.ClusterMode" json:"mode,omitempty"`                    // rollout trigger mode; default (unspecified) = manual
-	RolloutsEnabled bool                   `protobuf:"varint,7,opt,name=rollouts_enabled,json=rolloutsEnabled,proto3" json:"rollouts_enabled,omitempty"` // hard guard (rollout-safety.md §3); default off, never set by seed
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Desired             *ClusterDesired        `protobuf:"bytes,2,opt,name=desired,proto3" json:"desired,omitempty"`   // precious; persisted
+	Observed            *ClusterObserved       `protobuf:"bytes,3,opt,name=observed,proto3" json:"observed,omitempty"` // cache; in-memory only (datastore.md §2)
+	Endpoints           *ClusterEndpoints      `protobuf:"bytes,4,opt,name=endpoints,proto3" json:"endpoints,omitempty"`
+	Revision            uint64                 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`                                                  // last-write revision (datastore.md §4)
+	Mode                ClusterMode            `protobuf:"varint,6,opt,name=mode,proto3,enum=medea.v1.ClusterMode" json:"mode,omitempty"`                                // rollout trigger mode; default (unspecified) = manual
+	RolloutsEnabled     bool                   `protobuf:"varint,7,opt,name=rollouts_enabled,json=rolloutsEnabled,proto3" json:"rollouts_enabled,omitempty"`             // hard guard (rollout-safety.md §3); default off, never set by seed
+	ProvisioningEnabled bool                   `protobuf:"varint,8,opt,name=provisioning_enabled,json=provisioningEnabled,proto3" json:"provisioning_enabled,omitempty"` // hard guard (provisioning-plane.md §4); default off, never set by seed
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
@@ -570,6 +571,13 @@ func (x *Cluster) GetMode() ClusterMode {
 func (x *Cluster) GetRolloutsEnabled() bool {
 	if x != nil {
 		return x.RolloutsEnabled
+	}
+	return false
+}
+
+func (x *Cluster) GetProvisioningEnabled() bool {
+	if x != nil {
+		return x.ProvisioningEnabled
 	}
 	return false
 }
@@ -749,6 +757,7 @@ type NodePool struct {
 	// reconciler-managed.
 	Replicas      uint32            `protobuf:"varint,9,opt,name=replicas,proto3" json:"replicas,omitempty"`
 	Selector      map[string]string `protobuf:"bytes,10,rep,name=selector,proto3" json:"selector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // matched against Host.labels
+	Extensions    []string          `protobuf:"bytes,11,rep,name=extensions,proto3" json:"extensions,omitempty"`                                                                       // Image Factory system extensions for the pool (empty = stock schematic)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -849,6 +858,13 @@ func (x *NodePool) GetReplicas() uint32 {
 func (x *NodePool) GetSelector() map[string]string {
 	if x != nil {
 		return x.Selector
+	}
+	return nil
+}
+
+func (x *NodePool) GetExtensions() []string {
+	if x != nil {
+		return x.Extensions
 	}
 	return nil
 }
@@ -1519,7 +1535,7 @@ var File_medea_v1_medea_proto protoreflect.FileDescriptor
 
 const file_medea_v1_medea_proto_rawDesc = "" +
 	"\n" +
-	"\x14medea/v1/medea.proto\x12\bmedea.v1\x1a\x1egoogle/protobuf/duration.proto\"\xb4\x02\n" +
+	"\x14medea/v1/medea.proto\x12\bmedea.v1\x1a\x1egoogle/protobuf/duration.proto\"\xe7\x02\n" +
 	"\aCluster\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x122\n" +
 	"\adesired\x18\x02 \x01(\v2\x18.medea.v1.ClusterDesiredR\adesired\x125\n" +
@@ -1527,7 +1543,8 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\tendpoints\x18\x04 \x01(\v2\x1a.medea.v1.ClusterEndpointsR\tendpoints\x12\x1a\n" +
 	"\brevision\x18\x05 \x01(\x04R\brevision\x12)\n" +
 	"\x04mode\x18\x06 \x01(\x0e2\x15.medea.v1.ClusterModeR\x04mode\x12)\n" +
-	"\x10rollouts_enabled\x18\a \x01(\bR\x0frolloutsEnabled\"d\n" +
+	"\x10rollouts_enabled\x18\a \x01(\bR\x0frolloutsEnabled\x121\n" +
+	"\x14provisioning_enabled\x18\b \x01(\bR\x13provisioningEnabled\"d\n" +
 	"\x0eClusterDesired\x12#\n" +
 	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12-\n" +
 	"\x12kubernetes_version\x18\x02 \x01(\tR\x11kubernetesVersion\"p\n" +
@@ -1536,7 +1553,7 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x13control_plane_ready\x18\x02 \x01(\bR\x11controlPlaneReady\"<\n" +
 	"\x10ClusterEndpoints\x12\x14\n" +
 	"\x05talos\x18\x01 \x03(\tR\x05talos\x12\x12\n" +
-	"\x04kube\x18\x02 \x01(\tR\x04kube\"\xad\x03\n" +
+	"\x04kube\x18\x02 \x01(\tR\x04kube\"\xcd\x03\n" +
 	"\bNodePool\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -1548,7 +1565,10 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\brevision\x18\b \x01(\x04R\brevision\x12\x1a\n" +
 	"\breplicas\x18\t \x01(\rR\breplicas\x12<\n" +
 	"\bselector\x18\n" +
-	" \x03(\v2 .medea.v1.NodePool.SelectorEntryR\bselector\x1a;\n" +
+	" \x03(\v2 .medea.v1.NodePool.SelectorEntryR\bselector\x12\x1e\n" +
+	"\n" +
+	"extensions\x18\v \x03(\tR\n" +
+	"extensions\x1a;\n" +
 	"\rSelectorEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"6\n" +

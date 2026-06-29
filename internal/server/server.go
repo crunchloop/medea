@@ -237,6 +237,19 @@ func (s *Server) DisableRollouts(_ context.Context, req *pb.EnableRolloutsReques
 }
 
 func (s *Server) setRolloutsEnabled(cluster string, enabled bool) (*pb.Cluster, error) {
+	return s.setClusterFlag(cluster, func(c *pb.Cluster) { c.RolloutsEnabled = enabled })
+}
+
+func (s *Server) EnableProvisioning(_ context.Context, req *pb.EnableProvisioningRequest) (*pb.Cluster, error) {
+	return s.setClusterFlag(req.GetCluster(), func(c *pb.Cluster) { c.ProvisioningEnabled = true })
+}
+
+func (s *Server) DisableProvisioning(_ context.Context, req *pb.EnableProvisioningRequest) (*pb.Cluster, error) {
+	return s.setClusterFlag(req.GetCluster(), func(c *pb.Cluster) { c.ProvisioningEnabled = false })
+}
+
+// setClusterFlag applies a mutation to a Cluster record under CAS and returns it.
+func (s *Server) setClusterFlag(cluster string, apply func(*pb.Cluster)) (*pb.Cluster, error) {
 	if cluster == "" {
 		return nil, status.Error(codes.InvalidArgument, "cluster required")
 	}
@@ -249,7 +262,7 @@ func (s *Server) setRolloutsEnabled(cluster string, enabled bool) (*pb.Cluster, 
 		if c == nil {
 			return 0, status.Errorf(codes.NotFound, "cluster %q not found", cluster)
 		}
-		c.RolloutsEnabled = enabled
+		apply(c)
 		nr, err := s.store.PutClusterDesired(c, rev)
 		if err != nil {
 			return 0, err

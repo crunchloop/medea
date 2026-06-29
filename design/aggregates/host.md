@@ -35,9 +35,11 @@ that were already in a cluster). It is the foundation of the provisioning plane
        └──── Deprovisioning ◀───────┴──▶ Failed
 ```
 
-**v2-M1 only ever sets `Registered`.** `Allocated`→`Ready` (and
-`Deprovisioning`/`Failed`) are driven by the provisioning reconciler in v2-M3;
-they are defined now so the seam is visible, not yet exercised.
+**Driven states (v2-M3 scale-out):** `Registered` → `Provisioning` (the
+reconciler stages the host's boot config) → `Ready` (the node joined; a `Machine`
+is bound and added to the pool's members). `Allocated` is defined but currently
+skipped (the reconciler goes straight to `Provisioning` when it stages).
+`Deprovisioning` (scale-in) and `Failed` (provision timeout) land in v2-M4.
 
 ## Invariants
 
@@ -83,6 +85,8 @@ they are defined now so the seam is visible, not yet exercised.
   secrets bundle is extracted from a live control-plane config into the
   `CredentialStore` (`provisioning-plane.md` §5), ready for v2-M2 join-config
   generation.
-- **Known gaps (v2-M1):** only `Registered` is ever set; the lifecycle reconciler,
-  `NodePool.replicas`/`selector` matching, and Matchbox staging are v2-M2/M3
-  (`provisioning-plane.md` §§3, 4, 6).
+- **Known gaps (after v2-M3):** scale-out is driven (Registered→Provisioning→
+  Ready, replicas/selector matching, Matchbox staging); still pending —
+  scale-in/`Deprovisioning`, a provision-timeout→`Failed` transition, and the
+  serve-loop executor that runs the reconciler on an interval (v2-M4). End-to-end
+  (real Matchbox + node boot) is validated on the QEMU/Beelink tier.

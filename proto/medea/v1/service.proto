@@ -27,6 +27,8 @@ service Medea {
   // --- rollout safety (design/rollout-safety.md) ---
   rpc EnableRollouts(EnableRolloutsRequest) returns (Cluster);
   rpc DisableRollouts(EnableRolloutsRequest) returns (Cluster);
+  rpc EnableProvisioning(EnableProvisioningRequest) returns (Cluster);
+  rpc DisableProvisioning(EnableProvisioningRequest) returns (Cluster);
   rpc CreateRollout(CreateRolloutRequest) returns (Rollout);
   rpc ListRollouts(ListRolloutsRequest) returns (ListRolloutsResponse);
 
@@ -132,6 +134,10 @@ message RolloutControlResponse {
 }
 
 message EnableRolloutsRequest {
+  string cluster = 1;
+}
+
+message EnableProvisioningRequest {
   string cluster = 1;
 }
 

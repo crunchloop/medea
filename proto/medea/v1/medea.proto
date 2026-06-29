@@ -34,6 +34,7 @@ message Cluster {
   uint64 revision = 5;           // last-write revision (datastore.md §4)
   ClusterMode mode = 6;          // rollout trigger mode; default (unspecified) = manual
   bool rollouts_enabled = 7;     // hard guard (rollout-safety.md §3); default off, never set by seed
+  bool provisioning_enabled = 8; // hard guard (provisioning-plane.md §4); default off, never set by seed
 }
 
 message ClusterDesired {
@@ -68,7 +69,8 @@ message NodePool {
   // opts into provisioning by setting replicas + selector, and members becomes
   // reconciler-managed.
   uint32 replicas = 9;
-  map<string, string> selector = 10; // matched against Host.labels
+  map<string, string> selector = 10;  // matched against Host.labels
+  repeated string extensions = 11;    // Image Factory system extensions for the pool (empty = stock schematic)
 }
 
 message NodePoolDesired {
