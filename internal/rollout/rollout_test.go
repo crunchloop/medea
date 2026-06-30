@@ -12,9 +12,9 @@ import (
 
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/store"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/store"
 )
 
 // --- stateful fakes ---

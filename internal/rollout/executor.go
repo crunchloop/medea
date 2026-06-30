@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
-	"github.com/bilby91/medea/internal/creds"
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/store"
-	"github.com/bilby91/medea/internal/talos"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/creds"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/store"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 // ClientFactory builds the per-cluster talos/kube clients a job needs, plus a

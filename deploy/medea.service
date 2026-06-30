@@ -17,7 +17,7 @@
 
 [Unit]
 Description=Medea — external control plane for Talos clusters
-Documentation=https://github.com/bilby91/medea
+Documentation=https://github.com/crunchloop/medea
 After=network-online.target
 Wants=network-online.target
 

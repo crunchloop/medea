@@ -16,17 +16,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
-	"github.com/bilby91/medea/internal/auth"
-	"github.com/bilby91/medea/internal/creds"
-	"github.com/bilby91/medea/internal/refresh"
-	"github.com/bilby91/medea/internal/rollout"
-	"github.com/bilby91/medea/internal/provision"
-	"github.com/bilby91/medea/internal/provision/matchbox"
-	"github.com/bilby91/medea/internal/server"
-	"github.com/bilby91/medea/internal/store"
-	"github.com/bilby91/medea/internal/talos/k8supgrade"
-	"github.com/bilby91/medea/internal/tlsgen"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/auth"
+	"github.com/crunchloop/medea/internal/creds"
+	"github.com/crunchloop/medea/internal/refresh"
+	"github.com/crunchloop/medea/internal/rollout"
+	"github.com/crunchloop/medea/internal/provision"
+	"github.com/crunchloop/medea/internal/provision/matchbox"
+	"github.com/crunchloop/medea/internal/server"
+	"github.com/crunchloop/medea/internal/store"
+	"github.com/crunchloop/medea/internal/talos/k8supgrade"
+	"github.com/crunchloop/medea/internal/tlsgen"
 )
 
 // k8sUpgraderFactory builds the per-cluster Kubernetes upgrader from creds. It

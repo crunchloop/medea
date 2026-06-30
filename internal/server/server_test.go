@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
-	"github.com/bilby91/medea/internal/auth"
-	"github.com/bilby91/medea/internal/server"
-	"github.com/bilby91/medea/internal/store"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/auth"
+	"github.com/crunchloop/medea/internal/server"
+	"github.com/crunchloop/medea/internal/store"
 )
 
 const serverToken = "s3cret"

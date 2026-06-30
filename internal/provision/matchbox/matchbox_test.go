@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilby91/medea/internal/provision"
+	"github.com/crunchloop/medea/internal/provision"
 )
 
 func TestStageWritesGroupProfileAndConfig(t *testing.T) {

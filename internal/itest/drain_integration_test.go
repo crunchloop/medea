@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/bilby91/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/kube"
 )
 
 // TestDrainEvictsWorkload runs the (destructive) kube.Drain against a real

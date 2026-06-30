@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
 )
 
 // publish fans an event out to all subscribers, dropping on a full buffer

@@ -1,4 +1,4 @@
-module github.com/bilby91/medea
+module github.com/crunchloop/medea
 
 go 1.26.3
 

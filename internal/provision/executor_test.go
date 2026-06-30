@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 )

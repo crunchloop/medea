@@ -3,7 +3,7 @@
 **Status:** Draft (Pass-1); v1 implemented (M0–M4); v2 scoping (provisioning)
 **Author:** @bilby91
 **Date:** 2026-06-25 (initial draft); 2026-06-25 (Pass-1 — store, protocol, Talos-client, and state-model decisions resolved); 2026-06-26 (rollout-safety — explicit-job trigger, per-cluster mode + rolloutsEnabled); 2026-06-28 (v2 scoping — provisioning plane promoted from deferred; pillar sequencing v2→v3→v4)
-**Repo:** built in-place under `medea/` in `github.com/bilby91/talos-cluster`, which converges into Medea over time (§13 #11). Go module path: `github.com/bilby91/medea` from day one.
+**Repo:** built in-place under `medea/` in `github.com/bilby91/talos-cluster`, which converges into Medea over time (§13 #11). Go module path: `github.com/crunchloop/medea` from day one.
 **Visibility:** private
 **License:** Apache-2.0 (to be committed day 1 of the extracted repo)
 **Language version floor:** Go 1.25 (matches the Talos / COSI / controller ecosystem we call into)
@@ -202,7 +202,7 @@ Design notes:
 ### 8.1 Layering
 
 ```
-medea/                             (Go module `github.com/bilby91/medea`; repo converges here — §13 #11)
+medea/                             (Go module `github.com/crunchloop/medea`; repo converges here — §13 #11)
 ├── cmd/medea/                      CLI + service entrypoints
 ├── internal/
 │   ├── api/                        wire API (gRPC server + handlers)
@@ -318,7 +318,7 @@ Resolved during Pass-1 (2026-06-25):
 15. **No shelling out to `talosctl`; import Talos Go packages.** Typed, no external-binary runtime dep. Accepts the cost: importing `upgrade-k8s` from Talos's main module couples the build to a Talos release; quarantined behind one interface (§8.4, §12).
 12. **Name = Medea.** In the Argonautica, Medea is the one who brought down Talos (drained his ichor) — apt for a control plane with power over Talos nodes. Binary `medea`. Considered and rejected: `forge` (overloaded/unsearchable), `ichor`, `anvil`, `warden`.
 9. **Auth = bearer token over TLS (v1).** Server presents a self-signed cert (LAN service); a shared bearer token is checked by a gRPC interceptor. Rejected plaintext+token (cleartext credential on the LAN). mTLS / OIDC / RBAC deferred behind the interceptor seam. Credentials (talosconfig/kubeconfig) live in a separate file-backed `CredentialStore`, never in bbolt, never exported (`design/api-and-auth.md`).
-11. **Repo: convergence, not extraction.** The end state is that `bilby91/talos-cluster` *becomes* Medea — its current contents are hand-run early versions of Medea's own subsystems (`netboot/` = the Layer-0 provisioning plane; `controlplane.yaml`/`worker.yaml`/`patches/`/`cilium/` = the declarative cluster definition + add-ons Medea will own; `_out/` = seed state; `scripts/` = future reconcilers). So we **do not** spin up a separate repo or `git init` the subtree; we build in-place and the whole repo restructures under Medea when it's real. Consequence: **Go module path is `github.com/bilby91/medea` from day one** (not `…/talos-cluster/medea`) to avoid an import rewrite at convergence.
+11. **Repo: convergence, not extraction.** The end state is that `bilby91/talos-cluster` *becomes* Medea — its current contents are hand-run early versions of Medea's own subsystems (`netboot/` = the Layer-0 provisioning plane; `controlplane.yaml`/`worker.yaml`/`patches/`/`cilium/` = the declarative cluster definition + add-ons Medea will own; `_out/` = seed state; `scripts/` = future reconcilers). So we **do not** spin up a separate repo or `git init` the subtree; we build in-place and the whole repo restructures under Medea when it's real. Consequence: **Go module path is `github.com/crunchloop/medea` from day one** (not `…/talos-cluster/medea`) to avoid an import rewrite at convergence.
 
 Resolved during rollout-safety review (2026-06-26):
 

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/talos"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 // TestEtcdSnapshot validates the (non-destructive) etcd snapshot against a real

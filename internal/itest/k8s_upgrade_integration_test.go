@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/talos/k8supgrade"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/talos/k8supgrade"
 )
 
 // k8s upgrade path versions: boot the scratch cluster one patch below the

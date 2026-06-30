@@ -1491,7 +1491,7 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"\fListRollouts\x12\x1d.medea.v1.ListRolloutsRequest\x1a\x1e.medea.v1.ListRolloutsResponse\x12=\n" +
 	"\fRegisterHost\x12\x1d.medea.v1.RegisterHostRequest\x1a\x0e.medea.v1.Host\x12S\n" +
 	"\x0eDeregisterHost\x12\x1f.medea.v1.DeregisterHostRequest\x1a .medea.v1.DeregisterHostResponse\x127\n" +
-	"\x05Watch\x12\x16.medea.v1.WatchRequest\x1a\x14.medea.v1.WatchEvent0\x01B/Z-github.com/bilby91/medea/gen/medea/v1;medeav1b\x06proto3"
+	"\x05Watch\x12\x16.medea.v1.WatchRequest\x1a\x14.medea.v1.WatchEvent0\x01B2Z0github.com/crunchloop/medea/gen/medea/v1;medeav1b\x06proto3"
 
 var (
 	file_medea_v1_service_proto_rawDescOnce sync.Once

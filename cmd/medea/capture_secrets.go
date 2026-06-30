@@ -9,8 +9,8 @@ import (
 	talosconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"github.com/spf13/cobra"
 
-	"github.com/bilby91/medea/internal/creds"
-	"github.com/bilby91/medea/internal/talos"
+	"github.com/crunchloop/medea/internal/creds"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 var (

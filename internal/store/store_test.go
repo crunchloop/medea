@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
 )
 
 func openTemp(t *testing.T) *BoltStore {

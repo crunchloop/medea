@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilby91/medea/internal/provision"
+	"github.com/crunchloop/medea/internal/provision"
 )
 
 // Store writes Matchbox group/profile/generic files under a data root.

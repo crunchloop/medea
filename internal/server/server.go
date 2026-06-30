@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
-	"github.com/bilby91/medea/internal/store"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/store"
 )
 
 // Server is the gRPC service implementation.

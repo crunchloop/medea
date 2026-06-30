@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/talos"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 // TestCaptureSecrets validates the provisioning secrets-capture path

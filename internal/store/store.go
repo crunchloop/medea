@@ -15,7 +15,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
 )
 
 // Revision is the global monotonic write counter. Every successful write bumps

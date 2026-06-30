@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	pb "github.com/bilby91/medea/gen/medea/v1"
+	pb "github.com/crunchloop/medea/gen/medea/v1"
 )
 
 var (

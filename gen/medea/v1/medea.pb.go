@@ -1690,7 +1690,7 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x18ROLLOUT_JOB_STATE_PAUSED\x10\x03\x12\x1c\n" +
 	"\x18ROLLOUT_JOB_STATE_FAILED\x10\x04\x12\x1a\n" +
 	"\x16ROLLOUT_JOB_STATE_DONE\x10\x05\x12\x1f\n" +
-	"\x1bROLLOUT_JOB_STATE_CANCELLED\x10\x06B/Z-github.com/bilby91/medea/gen/medea/v1;medeav1b\x06proto3"
+	"\x1bROLLOUT_JOB_STATE_CANCELLED\x10\x06B2Z0github.com/crunchloop/medea/gen/medea/v1;medeav1b\x06proto3"
 
 var (
 	file_medea_v1_medea_proto_rawDescOnce sync.Once

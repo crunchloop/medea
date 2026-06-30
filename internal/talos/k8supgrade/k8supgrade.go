@@ -29,7 +29,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/encoder"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 
-	"github.com/bilby91/medea/internal/talos"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 // reconcileTimeout bounds Talos's manifest reconcile step (talosctl's default).

@@ -7,7 +7,7 @@ package medea.v1;
 
 import "medea/v1/medea.proto";
 
-option go_package = "github.com/bilby91/medea/gen/medea/v1;medeav1";
+option go_package = "github.com/crunchloop/medea/gen/medea/v1;medeav1";
 
 service Medea {
   // --- reads ---

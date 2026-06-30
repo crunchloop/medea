@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilby91/medea/internal/provision"
-	"github.com/bilby91/medea/internal/provision/matchbox"
+	"github.com/crunchloop/medea/internal/provision"
+	"github.com/crunchloop/medea/internal/provision/matchbox"
 )
 
 // TestMatchboxServesStagedHost validates the driver↔Matchbox contract

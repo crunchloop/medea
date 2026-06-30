@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bilby91/medea/internal/creds"
-	"github.com/bilby91/medea/internal/kube"
-	"github.com/bilby91/medea/internal/seed"
-	"github.com/bilby91/medea/internal/store"
-	"github.com/bilby91/medea/internal/talos"
+	"github.com/crunchloop/medea/internal/creds"
+	"github.com/crunchloop/medea/internal/kube"
+	"github.com/crunchloop/medea/internal/seed"
+	"github.com/crunchloop/medea/internal/store"
+	"github.com/crunchloop/medea/internal/talos"
 )
 
 var (
