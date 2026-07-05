@@ -32,6 +32,19 @@ func LoadSecretsBundle(b []byte) (*secrets.Bundle, error) {
 	return &bundle, nil
 }
 
+// k8sImageVersion normalizes a Kubernetes version for Talos's config generator.
+// The generator forms component image tags as ":v"+version (see generate/init.go
+// and generate/worker.go: fmt.Sprintf("%s:v%s", …, in.KubernetesVersion)) and so
+// expects the version WITHOUT a leading "v". Medea carries the version WITH the
+// "v" everywhere else (CLI flag, API, stored desired state, kubelet-reported
+// observed state), so passing it straight through yields a doubled "v"
+// ("vv1.36.1") and unresolvable images. Trim exactly one leading "v" here so the
+// generator re-adds it; an empty version is left empty (the generator then uses
+// its defaults).
+func k8sImageVersion(v string) string {
+	return strings.TrimPrefix(v, "v")
+}
+
 // WorkerConfigInput is everything needed to render a worker join config. v2
 // provisions workers into an existing cluster (provisioning-plane.md §4, §9);
 // control-plane joins (HA) are future work.
@@ -65,7 +78,7 @@ func RenderWorkerConfig(in WorkerConfigInput) ([]byte, error) {
 		opts = append(opts, generate.WithInstallImage(in.InstallImage))
 	}
 
-	input, err := generate.NewInput(in.ClusterName, in.ControlPlaneEndpoint, in.KubernetesVersion, opts...)
+	input, err := generate.NewInput(in.ClusterName, in.ControlPlaneEndpoint, k8sImageVersion(in.KubernetesVersion), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("provision: build config input: %w", err)
 	}
@@ -143,7 +156,7 @@ func RenderControlPlaneConfig(in ControlPlaneConfigInput) ([]byte, error) {
 		opts = append(opts, generate.WithInstallImage(in.InstallImage))
 	}
 
-	input, err := generate.NewInput(in.ClusterName, in.ControlPlaneEndpoint, in.KubernetesVersion, opts...)
+	input, err := generate.NewInput(in.ClusterName, in.ControlPlaneEndpoint, k8sImageVersion(in.KubernetesVersion), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("provision: build config input: %w", err)
 	}
@@ -196,7 +209,7 @@ func Talosconfig(clusterName, controlPlaneEndpoint, kubernetesVersion string, bu
 	if bundle == nil {
 		return nil, fmt.Errorf("provision: secrets bundle required")
 	}
-	input, err := generate.NewInput(clusterName, controlPlaneEndpoint, kubernetesVersion, generate.WithSecretsBundle(bundle))
+	input, err := generate.NewInput(clusterName, controlPlaneEndpoint, k8sImageVersion(kubernetesVersion), generate.WithSecretsBundle(bundle))
 	if err != nil {
 		return nil, fmt.Errorf("provision: build config input: %w", err)
 	}

@@ -37,6 +37,15 @@ func TestRenderWorkerConfig(t *testing.T) {
 			t.Fatalf("worker config missing %q:\n%s", want, s)
 		}
 	}
+	// The kubelet image tag must be a single-"v" version. The version arrives WITH
+	// a leading "v" (v1.36.2) and Talos's generator adds its own "v" — regression
+	// guard against the doubled-"v" ("vv1.36.2") that yields unresolvable images.
+	if !strings.Contains(s, "ghcr.io/siderolabs/kubelet:v1.36.2") {
+		t.Fatalf("worker config missing correct kubelet image tag :v1.36.2:\n%s", s)
+	}
+	if strings.Contains(s, ":vv") {
+		t.Fatalf("worker config has a doubled-v image tag (:vv…):\n%s", s)
+	}
 	// It must NOT be a control-plane config.
 	if strings.Contains(s, "type: controlplane") {
 		t.Fatalf("rendered a control-plane config:\n%s", s)
@@ -90,10 +99,20 @@ func TestRenderControlPlaneConfig(t *testing.T) {
 		"/dev/nvme0n1",
 		"factory.talos.dev/metal-installer/xyz:v1.13.5",
 		"allowSchedulingOnControlPlanes: true",
+		// Correct single-"v" k8s component image tags (see k8sImageVersion): kubelet
+		// plus the control-plane static-pod images.
+		"ghcr.io/siderolabs/kubelet:v1.36.1",
+		"registry.k8s.io/kube-apiserver:v1.36.1",
+		"registry.k8s.io/kube-scheduler:v1.36.1",
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("control-plane config missing %q:\n%s", want, s)
 		}
+	}
+	// Regression guard: the version arrives as "v1.36.1" and Talos adds its own
+	// "v" — a doubled-"v" tag (":vv1.36.1") is unresolvable and fails kubelet pull.
+	if strings.Contains(s, ":vv") {
+		t.Fatalf("control-plane config has a doubled-v image tag (:vv…):\n%s", s)
 	}
 	if strings.Contains(s, "type: worker") {
 		t.Fatalf("rendered a worker config:\n%s", s)
