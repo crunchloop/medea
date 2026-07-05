@@ -17,9 +17,11 @@ type opSDKVault struct {
 	client *onepassword.Client
 }
 
-// NewOnePasswordSDKVault builds a SecretVault from a service-account token. The
-// SDK core is pure-Go wasm (wazero), so it runs in the distroless image with no
-// shell or `op` binary (design/credentials.md §4.2).
+// NewOnePasswordSDKVault builds a SecretVault from a service-account token — no
+// `op` binary needed. NOTE: the SDK requires CGO to compile (its !cgo build is a
+// hard error on linux/darwin) and its desktop-app path uses import "C", so the
+// binary links libc: the image builds CGO_ENABLED=1 on distroless/base, not
+// static (see deploy/Dockerfile, design/credentials.md §4.2).
 func NewOnePasswordSDKVault(ctx context.Context, serviceAccountToken string) (SecretVault, error) {
 	c, err := onepassword.NewClient(ctx,
 		onepassword.WithServiceAccountToken(serviceAccountToken),

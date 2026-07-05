@@ -1,4 +1,4 @@
-# Build a static medea binary and ship it on distroless.
+# Build the medea binary and ship it on distroless.
 # Build from the medea/ module root:
 #   docker build -f deploy/Dockerfile -t medea:dev .
 #
@@ -10,10 +10,13 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Static binary so it runs on distroless/static.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/medea ./cmd/medea
+# CGO_ENABLED=1 is REQUIRED: the 1Password Go SDK refuses to compile without cgo
+# on linux/darwin (its !cgo file is a hard compile error), and its desktop-app
+# path uses import "C" — so the binary links libc. Hence distroless/base (glibc),
+# not distroless/static. golang:1.26 ships gcc.
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/medea ./cmd/medea
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/base-debian12:nonroot
 COPY --from=build /out/medea /usr/local/bin/medea
 USER nonroot:nonroot
 EXPOSE 7600

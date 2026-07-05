@@ -31,8 +31,11 @@ disaster recovery + restore (`backup.md` v3); rotation of the captured secrets
    `_out/` redundant (§4). Rejected-for-now: the full v3 DR bundle (bigger, and
    about etcd state, not credential custody — §8); OS keyring (still on-host).
 2. **The 1Password impl uses the 1Password Go SDK + a service-account token**, not
-   the `op` CLI — Medea ships on distroless (no shell/binary). A Connect sidecar
-   is the fallback (§4.2).
+   the `op` CLI — Medea ships on distroless (no shell/binary). The SDK **requires
+   CGO** (its `!cgo` build is a hard compile error and its desktop-app path uses
+   `import "C"`), so the image builds `CGO_ENABLED=1` on **distroless/base** (glibc),
+   not distroless/static. A Connect sidecar (pure-Go HTTP client, CGO-free) is the
+   fallback (§4.2).
 3. **Secrets stay out of bbolt and out of `Export`** — unchanged invariant
    (`datastore.md` §9, `api-and-auth.md` §5). The 1Password item is the *store*,
    not a serialized export; the plaintext desired-state export remains secret-free.
@@ -104,10 +107,17 @@ and can write straight to the configured backend.
 The Medea orchestrator container needs a **1Password service-account token**
 (mounted, `0600`, referenced by `token_file`). The token scopes to the cluster
 vault; it can read/write cluster creds — same trust class as the creds
-themselves, and Medea is already the top-privilege operator. The distroless image
-links the **Go SDK** (`github.com/1password/onepassword-sdk-go`) and talks to the
-1Password API directly. Fallback if the SDK is unfit: a **1Password Connect**
-sidecar on the orchestrator (HTTP + token), same seam.
+themselves, and Medea is already the top-privilege operator. The container links
+the **Go SDK** (`github.com/1password/onepassword-sdk-go`) and talks to the
+1Password API directly. **CGO caveat (learned the hard way):** the SDK does not
+compile with `CGO_ENABLED=0` on linux/darwin — its `!cgo` file is a deliberate
+hard compile error, and the desktop-app path uses `import "C"`, so the binary
+links libc. The image therefore builds `CGO_ENABLED=1` and ships on
+**distroless/base** (glibc), not distroless/static (`deploy/Dockerfile`). This
+also breaks the old ansible `GOOS=linux CGO_ENABLED=0 go build` cross-compile —
+another reason the container image (native linux build) is the deploy path.
+Fallback if the CGO/SDK friction ever bites: a **1Password Connect** sidecar
+(pure-Go HTTP client, CGO-free), same seam.
 
 ## 5. Client credential export (`GetCredentials`)
 
