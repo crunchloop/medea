@@ -150,6 +150,9 @@ func (s *Server) CreateCluster(_ context.Context, req *pb.CreateClusterRequest) 
 		KubernetesVersion: req.GetKubernetesVersion(),
 		InstallDisk:       req.GetInstallDisk(),
 		Extensions:        req.GetExtensions(),
+		Cni:               req.GetCni(),
+		DisableKubeProxy:  req.GetDisableKubeProxy(),
+		Patches:           req.GetPatches(),
 	}
 
 	if !req.GetConfirm() {

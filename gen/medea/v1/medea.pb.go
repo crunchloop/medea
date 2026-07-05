@@ -1510,6 +1510,9 @@ type ClusterBootstrap struct {
 	Message           string                 `protobuf:"bytes,10,opt,name=message,proto3" json:"message,omitempty"`
 	StartedAt         string                 `protobuf:"bytes,11,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"` // RFC3339, stamped when bootstrap begins (for the timeout)
 	Revision          uint64                 `protobuf:"varint,12,opt,name=revision,proto3" json:"revision,omitempty"`
+	Cni               string                 `protobuf:"bytes,13,opt,name=cni,proto3" json:"cni,omitempty"`                                                      // cluster.network.cni.name ("" = Talos default; "none" = BYO CNI)
+	DisableKubeProxy  bool                   `protobuf:"varint,14,opt,name=disable_kube_proxy,json=disableKubeProxy,proto3" json:"disable_kube_proxy,omitempty"` // cluster.proxy.disabled (CNI takes over kube-proxy)
+	Patches           [][]byte               `protobuf:"bytes,15,rep,name=patches,proto3" json:"patches,omitempty"`                                              // node-level gen-config patches (e.g. Longhorn mount); NOT the CNI app
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1626,6 +1629,27 @@ func (x *ClusterBootstrap) GetRevision() uint64 {
 		return x.Revision
 	}
 	return 0
+}
+
+func (x *ClusterBootstrap) GetCni() string {
+	if x != nil {
+		return x.Cni
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetDisableKubeProxy() bool {
+	if x != nil {
+		return x.DisableKubeProxy
+	}
+	return false
+}
+
+func (x *ClusterBootstrap) GetPatches() [][]byte {
+	if x != nil {
+		return x.Patches
+	}
+	return nil
 }
 
 type Rollout struct {
@@ -1831,7 +1855,7 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.medea.v1.ClusterRolloutPhaseR\x05phase\x12:\n" +
 	"\x19target_kubernetes_version\x18\x03 \x01(\tR\x17targetKubernetesVersion\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x04R\brevision\"\x9c\x03\n" +
+	"\brevision\x18\x05 \x01(\x04R\brevision\"\xf6\x03\n" +
 	"\x10ClusterBootstrap\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x125\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1f.medea.v1.ClusterBootstrapPhaseR\x05phase\x12\x15\n" +
@@ -1849,7 +1873,10 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	" \x01(\tR\amessage\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\v \x01(\tR\tstartedAt\x12\x1a\n" +
-	"\brevision\x18\f \x01(\x04R\brevision\"\xd7\x02\n" +
+	"\brevision\x18\f \x01(\x04R\brevision\x12\x10\n" +
+	"\x03cni\x18\r \x01(\tR\x03cni\x12,\n" +
+	"\x12disable_kube_proxy\x18\x0e \x01(\bR\x10disableKubeProxy\x12\x18\n" +
+	"\apatches\x18\x0f \x03(\fR\apatches\"\xd7\x02\n" +
 	"\aRollout\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x12\n" +
 	"\x04pool\x18\x02 \x01(\tR\x04pool\x12)\n" +
