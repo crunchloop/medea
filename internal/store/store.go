@@ -5,11 +5,13 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	bolt "go.etcd.io/bbolt"
@@ -72,6 +74,7 @@ type Store interface {
 	GetCluster(cluster string) (*pb.Cluster, Revision, error)
 	ListClusters() ([]*pb.Cluster, error)
 	PutClusterDesired(c *pb.Cluster, expected Revision) (Revision, error)
+	DeleteCluster(cluster string) error
 
 	GetNodePool(cluster, name string) (*pb.NodePool, Revision, error)
 	ListNodePools(cluster string) ([]*pb.NodePool, error)
@@ -532,6 +535,89 @@ func (s *BoltStore) DeleteHost(cluster, mac string) error {
 	}
 	s.lastRev = newRev
 	s.publish(Event{Kind: KindHost, Key: cluster + "/" + mac, Revision: newRev})
+	return nil
+}
+
+// DeleteCluster removes ALL of a cluster's records in one transaction — the
+// desired state (cluster, node pools, machines, provisioning hosts) and the
+// rollout state (cluster rollout, any in-flight/failed bootstrap, machine
+// rollouts, rollout jobs) — plus its in-memory observed cache. It's the
+// teardown counterpart to CreateCluster + the provisioning inventory. The
+// per-cluster credential material lives in the creds.Store, not bbolt, so the
+// caller (server) removes that separately. Idempotent: deleting an unknown
+// cluster clears nothing but still bumps the revision and emits an event.
+func (s *BoltStore) DeleteCluster(cluster string) error {
+	if cluster == "" {
+		return errors.New("store: cluster required")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	var newRev Revision
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		r, err := bumpRev(tx)
+		if err != nil {
+			return err
+		}
+		newRev = r
+		// Records keyed by the bare cluster name.
+		for _, b := range []*bolt.Bucket{
+			tx.Bucket(bDesired).Bucket(sClusters),
+			tx.Bucket(bRollouts).Bucket(sClusters),
+			tx.Bucket(bRollouts).Bucket(sBootstrap),
+		} {
+			if err := b.Delete([]byte(cluster)); err != nil {
+				return err
+			}
+		}
+		// Records keyed by ckey(cluster, x) — delete every entry for the cluster.
+		for _, b := range []*bolt.Bucket{
+			tx.Bucket(bDesired).Bucket(sNodePool),
+			tx.Bucket(bDesired).Bucket(sMachines),
+			tx.Bucket(bDesired).Bucket(sHosts),
+			tx.Bucket(bRollouts).Bucket(sMachines),
+			tx.Bucket(bRollouts).Bucket(sJobs),
+		} {
+			if err := deleteByClusterPrefix(b, cluster); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// Drop the in-memory observed cache for the cluster and its machines.
+	s.obsMu.Lock()
+	delete(s.obsCluster, cluster)
+	for k := range s.obsMachine {
+		if strings.HasPrefix(k, cluster+"\x00") {
+			delete(s.obsMachine, k)
+		}
+	}
+	s.obsMu.Unlock()
+	s.lastRev = newRev
+	s.publish(Event{Kind: KindCluster, Key: cluster, Revision: newRev})
+	return nil
+}
+
+// deleteByClusterPrefix removes every ckey(cluster, …) entry from a bucket. Keys
+// are collected first, then deleted: bbolt forbids mutating a bucket mid-ForEach.
+func deleteByClusterPrefix(b *bolt.Bucket, cluster string) error {
+	prefix := []byte(cluster + "\x00")
+	var keys [][]byte
+	if err := b.ForEach(func(k, _ []byte) error {
+		if bytes.HasPrefix(k, prefix) {
+			keys = append(keys, append([]byte(nil), k...))
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if err := b.Delete(k); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

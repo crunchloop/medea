@@ -636,6 +636,27 @@ func (s *Server) DeregisterHost(_ context.Context, req *pb.DeregisterHostRequest
 	return &pb.DeregisterHostResponse{}, nil
 }
 
+// DeleteCluster forgets a cluster: all bbolt records (desired + rollout state,
+// incl. any failed/in-flight bootstrap and provisioning hosts) and its stored
+// credentials. It does NOT reset the running nodes — it's Medea's teardown, so a
+// name can be re-created cleanly. Store state goes first; creds removal is
+// best-effort-after and surfaced as Internal if it fails (the bbolt record is
+// already gone, so a retry of DeleteCluster still clears the creds).
+func (s *Server) DeleteCluster(_ context.Context, req *pb.DeleteClusterRequest) (*pb.DeleteClusterResponse, error) {
+	if req.GetName() == "" {
+		return nil, status.Error(codes.InvalidArgument, "name is required")
+	}
+	if err := s.store.DeleteCluster(req.GetName()); err != nil {
+		return nil, mapErr(err)
+	}
+	if s.creds != nil {
+		if err := s.creds.Delete(req.GetName()); err != nil {
+			return nil, status.Errorf(codes.Internal, "delete credentials: %v", err)
+		}
+	}
+	return &pb.DeleteClusterResponse{}, nil
+}
+
 // --- watch ---
 
 func (s *Server) Watch(req *pb.WatchRequest, stream pb.Medea_WatchServer) error {

@@ -308,6 +308,68 @@ func TestHostRoundTripCASListDelete(t *testing.T) {
 	}
 }
 
+func TestDeleteClusterRemovesAllRecordsAndIsScoped(t *testing.T) {
+	s := openTemp(t)
+
+	// Seed the target cluster across every per-cluster bucket, plus a second
+	// cluster that must survive untouched.
+	if _, err := s.PutClusterDesired(cluster("home", "v1.36.1"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutNodePoolDesired(&pb.NodePool{Cluster: "home", Name: "workers"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutHostDesired(&pb.Host{Cluster: "home", Mac: "aa:bb", Pool: "controlplane",
+		Role: pb.Role_ROLE_CONTROLPLANE, State: pb.HostState_HOST_STATE_REGISTERED}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutClusterBootstrap(&pb.ClusterBootstrap{Cluster: "home", CpMac: "aa:bb",
+		CpEndpoint: "https://10.0.0.1:6443", CpIp: "10.0.0.1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutClusterDesired(cluster("keep", "v1.36.1"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutHostDesired(&pb.Host{Cluster: "keep", Mac: "cc:dd", Pool: "workers",
+		Role: pb.Role_ROLE_WORKER, State: pb.HostState_HOST_STATE_REGISTERED}, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.DeleteCluster("home"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// Every "home" record is gone.
+	if c, _, _ := s.GetCluster("home"); c != nil {
+		t.Fatalf("cluster record survived delete: %+v", c)
+	}
+	if nps, _ := s.ListNodePools("home"); len(nps) != 0 {
+		t.Fatalf("node pools survived delete: %+v", nps)
+	}
+	if hs, _ := s.ListHosts("home", ""); len(hs) != 0 {
+		t.Fatalf("hosts survived delete: %+v", hs)
+	}
+	if cb, _ := s.GetClusterBootstrap("home"); cb != nil {
+		t.Fatalf("bootstrap survived delete (would block re-create): %+v", cb)
+	}
+
+	// The other cluster is untouched.
+	if c, _, _ := s.GetCluster("keep"); c == nil {
+		t.Fatal("delete removed the wrong cluster (keep is gone)")
+	}
+	if hs, _ := s.ListHosts("keep", ""); len(hs) != 1 {
+		t.Fatalf("delete touched another cluster's hosts: %+v", hs)
+	}
+
+	// Idempotent, and empty name is rejected.
+	if err := s.DeleteCluster("home"); err != nil {
+		t.Fatalf("second delete not idempotent: %v", err)
+	}
+	if err := s.DeleteCluster(""); err == nil {
+		t.Fatal("expected error for empty cluster name")
+	}
+}
+
 func TestExportImportIncludesHosts(t *testing.T) {
 	s := openTemp(t)
 	if _, err := s.PutClusterDesired(cluster("home", "v1.36.1"), 0); err != nil {

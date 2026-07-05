@@ -21,6 +21,10 @@ type Store interface {
 	// (design/provisioning-plane.md §5).
 	Secrets(cluster string) ([]byte, error)
 	PutSecrets(cluster string, secrets []byte) error
+	// Delete removes ALL stored material for a cluster (talosconfig, kubeconfig,
+	// secrets) — the teardown counterpart to Put/PutSecrets. Idempotent: an
+	// unknown cluster is not an error.
+	Delete(cluster string) error
 }
 
 // FileStore is the v1 implementation: a 0700 directory of per-cluster 0600
@@ -72,6 +76,17 @@ func (f *FileStore) PutSecrets(cluster string, secrets []byte) error {
 		return err
 	}
 	return writeSecret(filepath.Join(dir, secretsFile), secrets)
+}
+
+func (f *FileStore) Delete(cluster string) error {
+	if cluster == "" {
+		return fmt.Errorf("creds: cluster required")
+	}
+	// RemoveAll is a no-op (nil) if the per-cluster dir doesn't exist.
+	if err := os.RemoveAll(filepath.Join(f.dir, cluster)); err != nil {
+		return fmt.Errorf("delete creds for %q: %w", cluster, err)
+	}
+	return nil
 }
 
 func (f *FileStore) read(cluster, name string) ([]byte, error) {

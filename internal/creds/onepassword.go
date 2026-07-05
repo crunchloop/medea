@@ -14,6 +14,9 @@ import (
 type SecretVault interface {
 	ReadField(ctx context.Context, vault, item, field string) ([]byte, error)
 	WriteFields(ctx context.Context, vault, item string, fields map[string][]byte) error
+	// DeleteItem removes the whole per-cluster item. Idempotent: a missing item
+	// is not an error.
+	DeleteItem(ctx context.Context, vault, item string) error
 }
 
 // OnePasswordStore is a creds.Store backed by a 1Password vault: one item per
@@ -76,6 +79,15 @@ func (o *OnePasswordStore) Put(cluster string, talos, kube []byte) error {
 		kubeFile:  kube,
 	}); err != nil {
 		return fmt.Errorf("write creds for %q to 1Password: %w", cluster, err)
+	}
+	return nil
+}
+
+func (o *OnePasswordStore) Delete(cluster string) error {
+	ctx, cancel := o.withTimeout()
+	defer cancel()
+	if err := o.vault.DeleteItem(ctx, o.vaultName, itemTitle(cluster)); err != nil {
+		return fmt.Errorf("delete creds for %q from 1Password: %w", cluster, err)
 	}
 	return nil
 }
