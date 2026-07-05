@@ -50,6 +50,11 @@ func (f *fakeVault) WriteFields(_ context.Context, vault, item string, fields ma
 	return nil
 }
 
+func (f *fakeVault) DeleteItem(_ context.Context, vault, item string) error {
+	delete(f.items, f.key(vault, item))
+	return nil
+}
+
 func TestOnePasswordStoreRoundTrip(t *testing.T) {
 	s := NewOnePasswordStore("Kubernetes", newFakeVault())
 
@@ -72,6 +77,18 @@ func TestOnePasswordStoreRoundTrip(t *testing.T) {
 
 	if _, err := s.TalosConfig("missing"); err == nil {
 		t.Fatal("expected error for missing cluster")
+	}
+
+	// Delete removes the whole item; reads then fail, and a second delete is a
+	// no-op (idempotent teardown).
+	if err := s.Delete("home"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := s.TalosConfig("home"); err == nil {
+		t.Fatal("expected error after delete")
+	}
+	if err := s.Delete("home"); err != nil {
+		t.Fatalf("second delete not idempotent: %v", err)
 	}
 }
 

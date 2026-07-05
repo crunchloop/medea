@@ -84,6 +84,26 @@ func (o *opSDKVault) WriteFields(ctx context.Context, vault, item string, fields
 	return nil
 }
 
+// DeleteItem removes the per-cluster item entirely. A missing item (or vault) is
+// treated as already-deleted so teardown is idempotent.
+func (o *opSDKVault) DeleteItem(ctx context.Context, vault, item string) error {
+	vaultID, err := o.vaultID(ctx, vault)
+	if err != nil {
+		return err
+	}
+	overview, err := o.findItem(ctx, vaultID, item)
+	if err != nil {
+		return err
+	}
+	if overview == nil {
+		return nil
+	}
+	if err := o.client.Items().Delete(ctx, vaultID, overview.ID); err != nil {
+		return fmt.Errorf("delete 1Password item %q: %w", item, err)
+	}
+	return nil
+}
+
 func (o *opSDKVault) vaultID(ctx context.Context, name string) (string, error) {
 	vaults, err := o.client.Vaults().List(ctx)
 	if err != nil {

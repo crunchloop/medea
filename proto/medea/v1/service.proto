@@ -44,6 +44,12 @@ service Medea {
   // default; confirm=true arms the ClusterBootstrap the executor then drives.
   rpc CreateCluster(CreateClusterRequest) returns (ClusterBootstrap);
 
+  // Delete a cluster from Medea: removes ALL of its records (desired + rollout
+  // state, incl. any in-flight/failed bootstrap and provisioning hosts) and its
+  // stored credentials. The teardown counterpart to CreateCluster — it forgets
+  // the cluster; it does NOT reset the running nodes.
+  rpc DeleteCluster(DeleteClusterRequest) returns (DeleteClusterResponse);
+
   // --- watch ---
   rpc Watch(WatchRequest) returns (stream WatchEvent);
 }
@@ -98,6 +104,12 @@ message DeregisterHostRequest {
 }
 
 message DeregisterHostResponse {}
+
+message DeleteClusterRequest {
+  string name = 1;
+}
+
+message DeleteClusterResponse {}
 
 message GetCredentialsRequest {
   string cluster = 1;

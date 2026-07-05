@@ -449,6 +449,66 @@ func TestRegisterListDeregisterHost(t *testing.T) {
 	}
 }
 
+func TestDeleteCluster(t *testing.T) {
+	ctx := context.Background()
+
+	cs, err := creds.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cs.Put("home", []byte("TALOS"), []byte("KUBE")); err != nil {
+		t.Fatal(err)
+	}
+
+	c, st := newClient(t, serverToken, server.WithCreds(cs))
+	seedCluster(t, st, "home", "v1.36.1")
+	seedCluster(t, st, "keep", "v1.36.1")
+	if _, err := st.PutHostDesired(&pb.Host{Cluster: "home", Mac: "aa:bb", Pool: "controlplane",
+		Role: pb.Role_ROLE_CONTROLPLANE, State: pb.HostState_HOST_STATE_REGISTERED}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutClusterBootstrap(&pb.ClusterBootstrap{Cluster: "home", CpMac: "aa:bb",
+		CpEndpoint: "https://10.0.0.1:6443", CpIp: "10.0.0.1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty name -> InvalidArgument.
+	if _, err := c.DeleteCluster(ctx, &pb.DeleteClusterRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("empty name: code=%v want InvalidArgument", status.Code(err))
+	}
+
+	if _, err := c.DeleteCluster(ctx, &pb.DeleteClusterRequest{Name: "home"}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// Store records gone (incl. the bootstrap that would otherwise block re-create).
+	if cl, _, _ := st.GetCluster("home"); cl != nil {
+		t.Fatalf("cluster record survived: %+v", cl)
+	}
+	if hs, _ := st.ListHosts("home", ""); len(hs) != 0 {
+		t.Fatalf("hosts survived: %+v", hs)
+	}
+	if cb, _ := st.GetClusterBootstrap("home"); cb != nil {
+		t.Fatalf("bootstrap survived: %+v", cb)
+	}
+	// Credentials gone.
+	if _, err := cs.TalosConfig("home"); err == nil {
+		t.Fatal("credentials survived delete")
+	}
+	// The other cluster is untouched.
+	if cl, _, _ := st.GetCluster("keep"); cl == nil {
+		t.Fatal("delete removed the wrong cluster")
+	}
+
+	// Re-create is now unblocked: no lingering cluster record or bootstrap.
+	if _, err := c.CreateCluster(ctx, &pb.CreateClusterRequest{
+		Name: "home", CpEndpoint: "https://10.0.0.1:6443", CpMac: "aa:bb", CpIp: "10.0.0.1",
+		TalosVersion: "v1.13.5", KubernetesVersion: "v1.36.1",
+	}); err != nil {
+		t.Fatalf("re-create after delete should be unblocked: %v", err)
+	}
+}
+
 func TestEnableDisableProvisioning(t *testing.T) {
 	ctx := context.Background()
 	c, st := newClient(t, serverToken)
