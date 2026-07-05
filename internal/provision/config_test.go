@@ -118,6 +118,63 @@ func TestRenderControlPlaneConfigAppliesPatches(t *testing.T) {
 	}
 }
 
+func TestRenderControlPlaneConfigCNIOption(t *testing.T) {
+	// The typed bring-your-own-CNI intent: cni=none + kube-proxy off. Medea builds
+	// the patch itself (the retired talos/patches/controlplane.yaml settings), so
+	// the caller passes no patch for these.
+	out, err := RenderControlPlaneConfig(ControlPlaneConfigInput{
+		ClusterName:          "home",
+		ControlPlaneEndpoint: "https://10.0.0.1:6443",
+		KubernetesVersion:    "v1.36.1",
+		Secrets:              testBundle(t),
+		CNI:                  "none",
+		DisableKubeProxy:     true,
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	s := string(out)
+	for _, want := range []string{"name: none", "disabled: true"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("CNI option not applied (expected %q):\n%s", want, s)
+		}
+	}
+}
+
+func TestRenderControlPlaneConfigNoCNIByDefault(t *testing.T) {
+	// Empty CNI + kube-proxy left on: Medea injects no CNI patch (Talos default).
+	out, err := RenderControlPlaneConfig(ControlPlaneConfigInput{
+		ClusterName:          "home",
+		ControlPlaneEndpoint: "https://10.0.0.1:6443",
+		KubernetesVersion:    "v1.36.1",
+		Secrets:              testBundle(t),
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	// The default Talos config carries a commented-out cni example, so assert on the
+	// active override instead: Medea must not have injected `name: none`.
+	if strings.Contains(string(out), "name: none") {
+		t.Fatalf("expected no cni override with default CNI:\n%s", out)
+	}
+}
+
+func TestCNIProxyPatch(t *testing.T) {
+	if p := cniProxyPatch("", false); p != nil {
+		t.Fatalf("expected nil patch when nothing requested, got %q", p)
+	}
+	p := string(cniProxyPatch("none", true))
+	for _, want := range []string{"cluster:", "cni:", "name: none", "proxy:", "disabled: true"} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("patch missing %q:\n%s", want, p)
+		}
+	}
+	// CNI only — no proxy stanza.
+	if got := string(cniProxyPatch("cilium", false)); strings.Contains(got, "proxy:") {
+		t.Fatalf("did not expect proxy stanza:\n%s", got)
+	}
+}
+
 func TestRenderControlPlaneConfigRequiresSecretsAndEndpoint(t *testing.T) {
 	if _, err := RenderControlPlaneConfig(ControlPlaneConfigInput{ClusterName: "home", ControlPlaneEndpoint: "https://x:6443"}); err == nil {
 		t.Fatal("expected error without a secrets bundle")

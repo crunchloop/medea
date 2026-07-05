@@ -204,6 +204,9 @@ message ClusterBootstrap {
   string message = 10;
   string started_at = 11;           // RFC3339, stamped when bootstrap begins (for the timeout)
   uint64 revision = 12;
+  string cni = 13;                  // cluster.network.cni.name ("" = Talos default; "none" = BYO CNI)
+  bool disable_kube_proxy = 14;     // cluster.proxy.disabled (CNI takes over kube-proxy)
+  repeated bytes patches = 15;      // node-level gen-config patches (e.g. Longhorn mount); NOT the CNI app
 }
 
 enum ClusterRolloutPhase {

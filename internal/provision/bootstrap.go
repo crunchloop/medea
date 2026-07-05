@@ -156,6 +156,9 @@ func (r *BootstrapReconciler) stage(ctx context.Context, cb *pb.ClusterBootstrap
 		InstallImage:                   InstallImage(r.factoryHost, schematic, cb.GetTalosVersion()),
 		Secrets:                        bundle,
 		AllowSchedulingOnControlPlanes: true, // single-node homelab CP runs workloads
+		CNI:                            cb.GetCni(),
+		DisableKubeProxy:               cb.GetDisableKubeProxy(),
+		Patches:                        cb.GetPatches(),
 	})
 	if err != nil {
 		return err

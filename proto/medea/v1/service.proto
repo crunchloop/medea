@@ -122,6 +122,9 @@ message CreateClusterRequest {
   string install_disk = 7;
   repeated string extensions = 8;  // schematic extension set (empty = stock)
   bool confirm = 9;                // false = plan (nothing persisted)
+  string cni = 10;                 // cluster.network.cni.name ("" = Talos default; "none" = BYO CNI)
+  bool disable_kube_proxy = 11;    // cluster.proxy.disabled (CNI takes over kube-proxy)
+  repeated bytes patches = 12;     // node-level gen-config patches (e.g. Longhorn mount); NOT the CNI app
 }
 
 message GetRolloutRequest {

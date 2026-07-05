@@ -730,8 +730,11 @@ type CreateClusterRequest struct {
 	TalosVersion      string                 `protobuf:"bytes,5,opt,name=talos_version,json=talosVersion,proto3" json:"talos_version,omitempty"`
 	KubernetesVersion string                 `protobuf:"bytes,6,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
 	InstallDisk       string                 `protobuf:"bytes,7,opt,name=install_disk,json=installDisk,proto3" json:"install_disk,omitempty"`
-	Extensions        []string               `protobuf:"bytes,8,rep,name=extensions,proto3" json:"extensions,omitempty"` // schematic extension set (empty = stock)
-	Confirm           bool                   `protobuf:"varint,9,opt,name=confirm,proto3" json:"confirm,omitempty"`      // false = plan (nothing persisted)
+	Extensions        []string               `protobuf:"bytes,8,rep,name=extensions,proto3" json:"extensions,omitempty"`                                         // schematic extension set (empty = stock)
+	Confirm           bool                   `protobuf:"varint,9,opt,name=confirm,proto3" json:"confirm,omitempty"`                                              // false = plan (nothing persisted)
+	Cni               string                 `protobuf:"bytes,10,opt,name=cni,proto3" json:"cni,omitempty"`                                                      // cluster.network.cni.name ("" = Talos default; "none" = BYO CNI)
+	DisableKubeProxy  bool                   `protobuf:"varint,11,opt,name=disable_kube_proxy,json=disableKubeProxy,proto3" json:"disable_kube_proxy,omitempty"` // cluster.proxy.disabled (CNI takes over kube-proxy)
+	Patches           [][]byte               `protobuf:"bytes,12,rep,name=patches,proto3" json:"patches,omitempty"`                                              // node-level gen-config patches (e.g. Longhorn mount); NOT the CNI app
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -827,6 +830,27 @@ func (x *CreateClusterRequest) GetConfirm() bool {
 		return x.Confirm
 	}
 	return false
+}
+
+func (x *CreateClusterRequest) GetCni() string {
+	if x != nil {
+		return x.Cni
+	}
+	return ""
+}
+
+func (x *CreateClusterRequest) GetDisableKubeProxy() bool {
+	if x != nil {
+		return x.DisableKubeProxy
+	}
+	return false
+}
+
+func (x *CreateClusterRequest) GetPatches() [][]byte {
+	if x != nil {
+		return x.Patches
+	}
+	return nil
 }
 
 type GetRolloutRequest struct {
@@ -1667,7 +1691,7 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"\n" +
 	"kubeconfig\x18\x02 \x01(\fR\n" +
 	"kubeconfig\x12\x18\n" +
-	"\asecrets\x18\x03 \x01(\fR\asecrets\"\xa8\x02\n" +
+	"\asecrets\x18\x03 \x01(\fR\asecrets\"\x82\x03\n" +
 	"\x14CreateClusterRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\vcp_endpoint\x18\x02 \x01(\tR\n" +
@@ -1680,7 +1704,11 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"\n" +
 	"extensions\x18\b \x03(\tR\n" +
 	"extensions\x12\x18\n" +
-	"\aconfirm\x18\t \x01(\bR\aconfirm\"A\n" +
+	"\aconfirm\x18\t \x01(\bR\aconfirm\x12\x10\n" +
+	"\x03cni\x18\n" +
+	" \x01(\tR\x03cni\x12,\n" +
+	"\x12disable_kube_proxy\x18\v \x01(\bR\x10disableKubeProxy\x12\x18\n" +
+	"\apatches\x18\f \x03(\fR\apatches\"A\n" +
 	"\x11GetRolloutRequest\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x12\n" +
 	"\x04pool\x18\x02 \x01(\tR\x04pool\"\x9c\x01\n" +
