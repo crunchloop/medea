@@ -183,6 +183,14 @@ shape the v1 rollout already preserves (`talos-client.md` §3,
 same extension set deterministically. Stock no-extensions (today's case) is just
 the empty-extension schematic.
 
+The factory boot-asset URLs are **HTTPS**, but iPXE (in the lab and on the
+Beelinks) has no TLS and silently fails on `kernel https://...`. So the Matchbox
+driver **mirrors** the kernel/initrd it is given — fetching them from the factory
+over HTTPS (which Medea can) into its `assets/` dir and rewriting the profile to
+serve them over plain **HTTP** (`matchbox.Store.Stage`). `BootAssets` still returns
+the factory source URLs; localization is the driver's job. This supersedes the
+hand-run `netboot/` asset fetch.
+
 ## 7. Power control (v4 seam, not built in v2)
 
 Provisioning stages the boot and waits; it does not power the node on. A

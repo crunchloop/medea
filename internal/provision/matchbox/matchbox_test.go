@@ -3,6 +3,8 @@ package matchbox
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,14 @@ import (
 )
 
 func TestStageWritesGroupProfileAndConfig(t *testing.T) {
+	// A stand-in Image Factory serving the kernel/initramfs Medea mirrors.
+	factory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("asset-bytes:" + r.URL.Path))
+	}))
+	defer factory.Close()
+	kURL := factory.URL + "/image/xyz/v1.13.5/kernel-amd64"
+	iURL := factory.URL + "/image/xyz/v1.13.5/initramfs-amd64.xz"
+
 	root := t.TempDir()
 	s, err := New(root, "http://matchbox:8086/")
 	if err != nil {
@@ -19,8 +29,8 @@ func TestStageWritesGroupProfileAndConfig(t *testing.T) {
 	}
 	cfg := []byte("machine:\n  type: worker\n")
 	err = s.Stage(context.Background(), "AA:BB:CC:DD:EE:FF", provision.Profile{
-		Kernel: "https://factory/kernel",
-		Initrd: []string{"https://factory/initrd"},
+		Kernel: kURL,
+		Initrd: []string{iURL},
 		Args:   []string{"talos.platform=metal", "console=ttyS0"},
 	}, cfg)
 	if err != nil {
@@ -46,11 +56,20 @@ func TestStageWritesGroupProfileAndConfig(t *testing.T) {
 		t.Fatalf("group wrong: %+v", g)
 	}
 
-	// profile carries boot assets + references the generic config via generic_id.
+	// profile references the generic config and points boot at MIRRORED assets —
+	// Matchbox HTTP URLs, not the factory HTTPS ones (iPXE has no TLS).
 	var p profile
 	readJSON(t, filepath.Join(root, profilesDir, key+".json"), &p)
-	if p.Boot.Kernel != "https://factory/kernel" || len(p.Boot.Initrd) != 1 || p.GenericID != key {
+	wantKernel := "http://matchbox:8086/assets/image/xyz/v1.13.5/kernel-amd64"
+	wantInitrd := "http://matchbox:8086/assets/image/xyz/v1.13.5/initramfs-amd64.xz"
+	if p.Boot.Kernel != wantKernel || len(p.Boot.Initrd) != 1 || p.Boot.Initrd[0] != wantInitrd || p.GenericID != key {
 		t.Fatalf("profile wrong: %+v", p)
+	}
+
+	// the assets were actually mirrored to disk (under /assets, mirroring the source path).
+	kBytes, err := os.ReadFile(filepath.Join(root, assetsDir, "image/xyz/v1.13.5/kernel-amd64"))
+	if err != nil || string(kBytes) != "asset-bytes:/image/xyz/v1.13.5/kernel-amd64" {
+		t.Fatalf("kernel not mirrored: %v / %q", err, kBytes)
 	}
 	// caller args are preserved and a talos.config arg pointing at Matchbox is added.
 	joined := strings.Join(p.Boot.Args, " ")
@@ -64,6 +83,40 @@ func TestStageWritesGroupProfileAndConfig(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(root, profilesDir, key+".json"))
 	if !strings.Contains(string(raw), `"generic_id"`) {
 		t.Fatalf("profile JSON missing generic_id field:\n%s", raw)
+	}
+}
+
+func TestMirrorCachesAndPassesThroughLocal(t *testing.T) {
+	var hits int
+	factory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte("k"))
+	}))
+	defer factory.Close()
+
+	root := t.TempDir()
+	s, _ := New(root, "http://matchbox:8086")
+	kURL := factory.URL + "/image/a/v/kernel-amd64"
+
+	// Two stages of the same asset → downloaded once (immutable, cache hit).
+	for i := 0; i < 2; i++ {
+		if err := s.Stage(context.Background(), "aa:bb:cc:dd:ee:0"+string(rune('0'+i)), provision.Profile{Kernel: kURL}, []byte("x")); err != nil {
+			t.Fatalf("stage %d: %v", i, err)
+		}
+	}
+	if hits != 1 {
+		t.Fatalf("expected 1 download (cached), got %d", hits)
+	}
+
+	// An asset already served by this Matchbox is passed through, not re-mirrored.
+	already := "http://matchbox:8086/assets/image/a/v/kernel-amd64"
+	got, err := s.mirror(context.Background(), already)
+	if err != nil || got != already {
+		t.Fatalf("expected passthrough of own URL, got %q (%v)", got, err)
+	}
+	// A non-HTTP reference (relative/local) is passed through untouched.
+	if got, _ := s.mirror(context.Background(), "vmlinuz"); got != "vmlinuz" {
+		t.Fatalf("expected passthrough of local ref, got %q", got)
 	}
 }
 

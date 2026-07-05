@@ -94,7 +94,10 @@ func InstallImage(host, schematicID, version string) string {
 	return fmt.Sprintf("%s/metal-installer/%s:%s", host, schematicID, version)
 }
 
-// BootAssets returns the PXE kernel + initrd URLs for a schematic + version.
+// BootAssets returns the SOURCE (Image Factory, HTTPS) kernel + initrd URLs for a
+// schematic + version. These are where the assets are fetched FROM: the Matchbox
+// driver mirrors them and serves them to nodes over plain HTTP, because iPXE has
+// no TLS (see matchbox.Store.Stage). Callers pass these straight into the Profile.
 func BootAssets(host, schematicID, version, arch string) (kernel string, initrd []string) {
 	if host == "" {
 		host = DefaultFactoryHost
