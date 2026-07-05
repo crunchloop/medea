@@ -131,26 +131,29 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 	defer st.Close()
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Credential store (file or 1Password); shared by the API's GetCredentials
+	// handler and the refresh/rollout/provision factories.
+	cs, err := buildCredsStore(ctx)
+	if err != nil {
+		return fmt.Errorf("creds: %w", err)
+	}
+
 	srv := grpc.NewServer(
 		grpc.Creds(tlsCreds),
 		grpc.UnaryInterceptor(auth.UnaryInterceptor(token)),
 		grpc.StreamInterceptor(auth.StreamInterceptor(token)),
 	)
-	pb.RegisterMedeaServer(srv, server.New(st))
+	pb.RegisterMedeaServer(srv, server.New(st, server.WithCreds(cs)))
 
 	lis, err := net.Listen("tcp", serveListen)
 	if err != nil {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	// Refresh loop: rebuild observed state from the clusters (datastore.md §7).
-	cs, err := buildCredsStore(ctx)
-	if err != nil {
-		return fmt.Errorf("creds: %w", err)
-	}
 	go refresh.New(st, refresh.CredsFactory(cs), serveRefreshIntv).Run(ctx)
 
 	// Rollout executor: global gate, default off. Even when on, per-cluster

@@ -29,6 +29,7 @@ const (
 	Medea_ListMachines_FullMethodName        = "/medea.v1.Medea/ListMachines"
 	Medea_ListHosts_FullMethodName           = "/medea.v1.Medea/ListHosts"
 	Medea_GetRollout_FullMethodName          = "/medea.v1.Medea/GetRollout"
+	Medea_GetCredentials_FullMethodName      = "/medea.v1.Medea/GetCredentials"
 	Medea_SetClusterVersions_FullMethodName  = "/medea.v1.Medea/SetClusterVersions"
 	Medea_SetNodePoolVersion_FullMethodName  = "/medea.v1.Medea/SetNodePoolVersion"
 	Medea_PauseRollout_FullMethodName        = "/medea.v1.Medea/PauseRollout"
@@ -55,6 +56,10 @@ type MedeaClient interface {
 	ListMachines(ctx context.Context, in *ListMachinesRequest, opts ...grpc.CallOption) (*ListMachinesResponse, error)
 	ListHosts(ctx context.Context, in *ListHostsRequest, opts ...grpc.CallOption) (*ListHostsResponse, error)
 	GetRollout(ctx context.Context, in *GetRolloutRequest, opts ...grpc.CallOption) (*GetRolloutResponse, error)
+	// Fetch a cluster's stored credentials so an operator/CI keeps kubectl/talosctl
+	// access without home-cluster's _out/ (design/credentials.md §5). Guarded by the
+	// same bearer token as every other RPC.
+	GetCredentials(ctx context.Context, in *GetCredentialsRequest, opts ...grpc.CallOption) (*GetCredentialsResponse, error)
 	// --- desired-state mutations (intent verbs; server-side read-modify-write) ---
 	SetClusterVersions(ctx context.Context, in *SetClusterVersionsRequest, opts ...grpc.CallOption) (*SetVersionsResponse, error)
 	SetNodePoolVersion(ctx context.Context, in *SetNodePoolVersionRequest, opts ...grpc.CallOption) (*SetVersionsResponse, error)
@@ -136,6 +141,16 @@ func (c *medeaClient) GetRollout(ctx context.Context, in *GetRolloutRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRolloutResponse)
 	err := c.cc.Invoke(ctx, Medea_GetRollout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *medeaClient) GetCredentials(ctx context.Context, in *GetCredentialsRequest, opts ...grpc.CallOption) (*GetCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCredentialsResponse)
+	err := c.cc.Invoke(ctx, Medea_GetCredentials_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -292,6 +307,10 @@ type MedeaServer interface {
 	ListMachines(context.Context, *ListMachinesRequest) (*ListMachinesResponse, error)
 	ListHosts(context.Context, *ListHostsRequest) (*ListHostsResponse, error)
 	GetRollout(context.Context, *GetRolloutRequest) (*GetRolloutResponse, error)
+	// Fetch a cluster's stored credentials so an operator/CI keeps kubectl/talosctl
+	// access without home-cluster's _out/ (design/credentials.md §5). Guarded by the
+	// same bearer token as every other RPC.
+	GetCredentials(context.Context, *GetCredentialsRequest) (*GetCredentialsResponse, error)
 	// --- desired-state mutations (intent verbs; server-side read-modify-write) ---
 	SetClusterVersions(context.Context, *SetClusterVersionsRequest) (*SetVersionsResponse, error)
 	SetNodePoolVersion(context.Context, *SetNodePoolVersionRequest) (*SetVersionsResponse, error)
@@ -336,6 +355,9 @@ func (UnimplementedMedeaServer) ListHosts(context.Context, *ListHostsRequest) (*
 }
 func (UnimplementedMedeaServer) GetRollout(context.Context, *GetRolloutRequest) (*GetRolloutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRollout not implemented")
+}
+func (UnimplementedMedeaServer) GetCredentials(context.Context, *GetCredentialsRequest) (*GetCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCredentials not implemented")
 }
 func (UnimplementedMedeaServer) SetClusterVersions(context.Context, *SetClusterVersionsRequest) (*SetVersionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetClusterVersions not implemented")
@@ -501,6 +523,24 @@ func _Medea_GetRollout_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MedeaServer).GetRollout(ctx, req.(*GetRolloutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Medea_GetCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).GetCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_GetCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).GetCredentials(ctx, req.(*GetCredentialsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -762,6 +802,10 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRollout",
 			Handler:    _Medea_GetRollout_Handler,
+		},
+		{
+			MethodName: "GetCredentials",
+			Handler:    _Medea_GetCredentials_Handler,
 		},
 		{
 			MethodName: "SetClusterVersions",

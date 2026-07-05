@@ -15,6 +15,7 @@ import (
 
 	pb "github.com/crunchloop/medea/gen/medea/v1"
 	"github.com/crunchloop/medea/internal/auth"
+	"github.com/crunchloop/medea/internal/creds"
 	"github.com/crunchloop/medea/internal/server"
 	"github.com/crunchloop/medea/internal/store"
 )
@@ -33,7 +34,7 @@ func (tokenCreds) RequireTransportSecurity() bool { return false }
 
 // newClient wires a real BoltStore + auth interceptors + server over an
 // in-memory bufconn, returning a client that presents clientToken.
-func newClient(t *testing.T, clientToken string) (pb.MedeaClient, *store.BoltStore) {
+func newClient(t *testing.T, clientToken string, opts ...server.Option) (pb.MedeaClient, *store.BoltStore) {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "medea.db"))
 	if err != nil {
@@ -46,7 +47,7 @@ func newClient(t *testing.T, clientToken string) (pb.MedeaClient, *store.BoltSto
 		grpc.UnaryInterceptor(auth.UnaryInterceptor(serverToken)),
 		grpc.StreamInterceptor(auth.StreamInterceptor(serverToken)),
 	)
-	pb.RegisterMedeaServer(srv, server.New(st))
+	pb.RegisterMedeaServer(srv, server.New(st, opts...))
 	go srv.Serve(lis)
 	t.Cleanup(srv.Stop)
 
@@ -69,6 +70,59 @@ func seedCluster(t *testing.T, st *store.BoltStore, name, k8s string) {
 		Desired: &pb.ClusterDesired{TalosVersion: "v1.13.5", KubernetesVersion: k8s},
 	}, 0); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGetCredentials(t *testing.T) {
+	ctx := context.Background()
+
+	cs, err := creds.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cs.Put("home", []byte("TALOS"), []byte("KUBE")); err != nil {
+		t.Fatal(err)
+	}
+
+	c, st := newClient(t, serverToken, server.WithCreds(cs))
+	seedCluster(t, st, "home", "v1.36.1")
+
+	// Default: both client configs, and NOT the secrets bundle.
+	resp, err := c.GetCredentials(ctx, &pb.GetCredentialsRequest{Cluster: "home"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.GetTalosconfig()) != "TALOS" || string(resp.GetKubeconfig()) != "KUBE" {
+		t.Fatalf("default: talos=%q kube=%q", resp.GetTalosconfig(), resp.GetKubeconfig())
+	}
+	if len(resp.GetSecrets()) != 0 {
+		t.Fatal("secrets returned without opt-in")
+	}
+
+	// Selection: kubeconfig only.
+	resp, err = c.GetCredentials(ctx, &pb.GetCredentialsRequest{Cluster: "home", Kubeconfig: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.GetTalosconfig()) != 0 || string(resp.GetKubeconfig()) != "KUBE" {
+		t.Fatalf("kube-only: talos=%q kube=%q", resp.GetTalosconfig(), resp.GetKubeconfig())
+	}
+
+	// Unknown cluster -> NotFound.
+	if _, err := c.GetCredentials(ctx, &pb.GetCredentialsRequest{Cluster: "nope"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("unknown cluster: code=%v want NotFound", status.Code(err))
+	}
+	// Missing cluster -> InvalidArgument.
+	if _, err := c.GetCredentials(ctx, &pb.GetCredentialsRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("empty cluster: code=%v want InvalidArgument", status.Code(err))
+	}
+}
+
+// Without a configured credential store, GetCredentials reports Unimplemented.
+func TestGetCredentialsNoStore(t *testing.T) {
+	c, _ := newClient(t, serverToken) // no WithCreds
+	if _, err := c.GetCredentials(context.Background(), &pb.GetCredentialsRequest{Cluster: "home"}); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("no creds store: code=%v want Unimplemented", status.Code(err))
 	}
 }
 

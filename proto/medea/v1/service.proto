@@ -17,6 +17,10 @@ service Medea {
   rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse);
   rpc ListHosts(ListHostsRequest) returns (ListHostsResponse);
   rpc GetRollout(GetRolloutRequest) returns (GetRolloutResponse);
+  // Fetch a cluster's stored credentials so an operator/CI keeps kubectl/talosctl
+  // access without home-cluster's _out/ (design/credentials.md §5). Guarded by the
+  // same bearer token as every other RPC.
+  rpc GetCredentials(GetCredentialsRequest) returns (GetCredentialsResponse);
 
   // --- desired-state mutations (intent verbs; server-side read-modify-write) ---
   rpc SetClusterVersions(SetClusterVersionsRequest) returns (SetVersionsResponse);
@@ -90,6 +94,19 @@ message DeregisterHostRequest {
 }
 
 message DeregisterHostResponse {}
+
+message GetCredentialsRequest {
+  string cluster = 1;
+  bool talosconfig = 2; // include talosconfig (default if none selected)
+  bool kubeconfig = 3;  // include kubeconfig  (default if none selected)
+  bool secrets = 4;     // include the machine-secrets bundle (opt-in; sensitive)
+}
+
+message GetCredentialsResponse {
+  bytes talosconfig = 1;
+  bytes kubeconfig = 2;
+  bytes secrets = 3;
+}
 
 message GetRolloutRequest {
   string cluster = 1;

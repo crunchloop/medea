@@ -14,6 +14,12 @@ import (
 var (
 	getCluster string
 	getPool    string
+
+	credsCluster string
+	credsTalos   bool
+	credsKube    bool
+	credsSecrets bool
+	credsOut     string
 )
 
 func init() {
@@ -37,12 +43,96 @@ func init() {
 		Args:  cobra.NoArgs,
 		RunE:  runGetMachines,
 	}
+	credentials := &cobra.Command{
+		Use:   "credentials",
+		Short: "Fetch a cluster's stored credentials (talosconfig/kubeconfig)",
+		Long: "credentials fetches a cluster's stored talosconfig/kubeconfig from Medea, so\n" +
+			"you keep kubectl/talosctl access without home-cluster's _out/ (design/\n" +
+			"credentials.md §5). Defaults to both client configs; --secrets is opt-in.\n\n" +
+			"  medea get credentials --cluster home --kubeconfig > ~/.kube/config",
+		Args: cobra.NoArgs,
+		RunE: runGetCredentials,
+	}
+
 	nodepools.Flags().StringVar(&getCluster, "cluster", "", "cluster name (required)")
 	machines.Flags().StringVar(&getCluster, "cluster", "", "cluster name (required)")
 	machines.Flags().StringVar(&getPool, "pool", "", "filter by node pool")
 
-	getCmd.AddCommand(clusters, nodepools, machines)
+	cf := credentials.Flags()
+	cf.StringVar(&credsCluster, "cluster", "", "cluster name (required)")
+	cf.BoolVar(&credsTalos, "talosconfig", false, "fetch talosconfig")
+	cf.BoolVar(&credsKube, "kubeconfig", false, "fetch kubeconfig")
+	cf.BoolVar(&credsSecrets, "secrets", false, "fetch the machine-secrets bundle (sensitive)")
+	cf.StringVarP(&credsOut, "output", "o", "", "write to this file (requires selecting exactly one item)")
+
+	getCmd.AddCommand(clusters, nodepools, machines, credentials)
 	rootCmd.AddCommand(getCmd)
+}
+
+func runGetCredentials(_ *cobra.Command, _ []string) error {
+	if credsCluster == "" {
+		return fmt.Errorf("--cluster is required")
+	}
+	c, closeFn, err := dial()
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	resp, err := c.GetCredentials(ctx, &pb.GetCredentialsRequest{
+		Cluster:     credsCluster,
+		Talosconfig: credsTalos,
+		Kubeconfig:  credsKube,
+		Secrets:     credsSecrets,
+	})
+	if err != nil {
+		return err
+	}
+
+	type item struct {
+		name string
+		data []byte
+	}
+	var items []item
+	if len(resp.GetTalosconfig()) > 0 {
+		items = append(items, item{"talosconfig", resp.GetTalosconfig()})
+	}
+	if len(resp.GetKubeconfig()) > 0 {
+		items = append(items, item{"kubeconfig", resp.GetKubeconfig()})
+	}
+	if len(resp.GetSecrets()) > 0 {
+		items = append(items, item{"secrets.yaml", resp.GetSecrets()})
+	}
+	if len(items) == 0 {
+		return fmt.Errorf("no credentials returned for %q", credsCluster)
+	}
+
+	if credsOut != "" {
+		if len(items) != 1 {
+			return fmt.Errorf("-o requires selecting exactly one of --talosconfig/--kubeconfig/--secrets")
+		}
+		if err := os.WriteFile(credsOut, items[0].data, 0o600); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s -> %s\n", items[0].name, credsOut)
+		return nil
+	}
+
+	// A single item prints raw (so `> ~/.kube/config` works); multiple are labeled.
+	if len(items) == 1 {
+		_, err := os.Stdout.Write(items[0].data)
+		return err
+	}
+	for _, it := range items {
+		fmt.Printf("# --- %s ---\n", it.name)
+		if _, err := os.Stdout.Write(it.data); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+	return nil
 }
 
 func runGetClusters(_ *cobra.Command, _ []string) error {

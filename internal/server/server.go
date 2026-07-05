@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/crunchloop/medea/gen/medea/v1"
+	"github.com/crunchloop/medea/internal/creds"
 	"github.com/crunchloop/medea/internal/store"
 )
 
@@ -19,10 +20,24 @@ import (
 type Server struct {
 	pb.UnimplementedMedeaServer
 	store store.Store
+	creds creds.Store // optional; enables GetCredentials
 }
 
+// Option configures a Server.
+type Option func(*Server)
+
+// WithCreds lets the server serve stored credentials via GetCredentials
+// (design/credentials.md §5). Without it, GetCredentials returns Unimplemented.
+func WithCreds(cs creds.Store) Option { return func(s *Server) { s.creds = cs } }
+
 // New returns a Server backed by st.
-func New(st store.Store) *Server { return &Server{store: st} }
+func New(st store.Store, opts ...Option) *Server {
+	s := &Server{store: st}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
 
 // mapErr converts non-domain store errors to gRPC status codes.
 func mapErr(err error) error {
@@ -50,6 +65,55 @@ func (s *Server) GetCluster(_ context.Context, req *pb.GetClusterRequest) (*pb.C
 		return nil, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
 	}
 	return c, nil
+}
+
+// GetCredentials returns a cluster's stored credentials so an operator/CI keeps
+// kubectl/talosctl access without home-cluster's _out/ (design/credentials.md §5).
+// Defaults to the client configs; the secrets bundle is opt-in. Guarded by the
+// bearer-token interceptor like every RPC.
+func (s *Server) GetCredentials(_ context.Context, req *pb.GetCredentialsRequest) (*pb.GetCredentialsResponse, error) {
+	if req.GetCluster() == "" {
+		return nil, status.Error(codes.InvalidArgument, "cluster required")
+	}
+	if s.creds == nil {
+		return nil, status.Error(codes.Unimplemented, "credential store not configured")
+	}
+	c, _, err := s.store.GetCluster(req.GetCluster())
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	if c == nil {
+		return nil, status.Errorf(codes.NotFound, "cluster %q not found", req.GetCluster())
+	}
+
+	wantTalos, wantKube, wantSecrets := req.GetTalosconfig(), req.GetKubeconfig(), req.GetSecrets()
+	if !wantTalos && !wantKube && !wantSecrets {
+		wantTalos, wantKube = true, true // default: both client configs, not the secrets bundle
+	}
+
+	resp := &pb.GetCredentialsResponse{}
+	if wantTalos {
+		b, err := s.creds.TalosConfig(req.GetCluster())
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "talosconfig for %q: %v", req.GetCluster(), err)
+		}
+		resp.Talosconfig = b
+	}
+	if wantKube {
+		b, err := s.creds.KubeConfig(req.GetCluster())
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "kubeconfig for %q: %v", req.GetCluster(), err)
+		}
+		resp.Kubeconfig = b
+	}
+	if wantSecrets {
+		b, err := s.creds.Secrets(req.GetCluster())
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "secrets for %q: %v", req.GetCluster(), err)
+		}
+		resp.Secrets = b
+	}
+	return resp, nil
 }
 
 func (s *Server) ListClusters(_ context.Context, _ *pb.ListClustersRequest) (*pb.ListClustersResponse, error) {
