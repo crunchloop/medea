@@ -1,7 +1,9 @@
 # New-cluster bootstrap — Medea-driven cluster creation (Phase B)
 
 **Status:** B-M1 + B-M2 implemented (single-CP); B-M3 (QEMU validation) pending
-**Date:** 2026-07-04
+**Date:** 2026-07-04 · **Revised 2026-07-05** (CNI absorbed as a typed option;
+Cilium is no longer a bootstrap patch — see the "CNI" note in §5 and the
+home-cluster design record `docs/design/cilium-cni-install.md`)
 
 Scope: Medea creates a **new single-control-plane Talos cluster from bare metal** —
 generating the PKI, rendering and serving the first control-plane machine config,
@@ -48,10 +50,22 @@ backup/restore (v3); auto-repair (v4). B is deliberately the *single-CP* core.
    `BootAssets`/`InstallImage` are used unchanged.
 6. **Power-agnostic** (same stance as provisioning-plane §7): Medea stages the
    boot and waits; power-on is manual or WoL. No BMC.
-7. **Per-cluster machine-config patches are inputs to the render** — the
-   `home-cluster` `talos/` layer (`allowSchedulingOnControlPlanes`, CNI-none +
-   the inline-Cilium manifest, install disk). This is the seam where the
-   machine-config story (the config-rollout feature) meets bootstrap.
+7. **CNI is a typed option; the payload stays out of Medea** (revised 2026-07-05).
+   Medea absorbs the *structured* bring-your-own-CNI settings as first-class
+   options — `--cni <name>` (→ `cluster.network.cni.name`) and
+   `--disable-kube-proxy` (→ `cluster.proxy.disabled`), beside the existing
+   `allowSchedulingOnControlPlanes`. It does **not** carry the CNI *application*:
+   the old `talos/patches/cilium-inline.yaml` (65KB of rendered Helm baked into
+   the machine config) is retired. Cilium is installed once at bootstrap via
+   `helm` and then owned by Argo — see the home-cluster design record
+   `docs/design/cilium-cni-install.md`. Which CNI, which version, which values is
+   *cluster policy*, not cluster-creation mechanism, so it never enters Medea.
+8. **Genuinely node-level patches remain render inputs** — the small remainder of
+   the `home-cluster` `talos/` layer that is *not* an application and has no typed
+   option yet (e.g. the Longhorn `/var/lib/longhorn` kubelet extraMount). Supplied
+   as `--patch @file` and applied via `RenderControlPlaneConfig`'s generic
+   `Patches [][]byte` seam. This is the seam where the machine-config story (the
+   config-rollout feature) meets bootstrap.
 
 ## 2. The bootstrap flow (a resumable phase machine)
 
@@ -138,15 +152,46 @@ with three differences:
 1. `input.Config(machine.TypeControlPlane)` (not worker).
 2. **Generated** secrets bundle (`GenerateSecrets`), stored to the `CredentialStore`
    *before* render — Medea is the PKI owner from t=0.
-3. **Per-cluster patches** applied on top: `allowSchedulingOnControlPlanes` (single
-   node runs workloads), `cluster.network.cni.name: none` + the inline-Cilium
-   manifest, kube-proxy disabled, the install disk — i.e. the `home-cluster`
-   `talos/` layer, supplied in the create spec. This is the concrete tie-in to the
-   machine-config-rollout feature: the same desired-config that a config rollout
-   would later reconcile is what bootstrap first *applies*.
+3. **Typed CNI/scheduling options + per-cluster patches** (revised 2026-07-05):
+   - `AllowSchedulingOnControlPlanes` (single node runs workloads) — a
+     `generate.Option`, unchanged.
+   - **CNI** — `CNI string` (e.g. `"none"`) and `DisableKubeProxy bool`. Talos's
+     `generate` package has no kube-proxy-disable option, so rather than mix a
+     `generate.Option` for one and a patch for the other, Medea translates both
+     into one small internally-built strategic-merge patch
+     (`cluster.network.cni.name` + `cluster.proxy.disabled`) applied via the same
+     `applyPatches` path. The *interface* is typed; the implementation is a patch
+     Medea owns, not one the caller supplies.
+   - **Node-level patches** — the caller's `Patches [][]byte` (the Longhorn mount,
+     etc.), applied after the CNI patch. This is the concrete tie-in to the
+     machine-config-rollout feature: the same desired-config a config rollout
+     would later reconcile is what bootstrap first *applies*.
+
+   **Not here anymore:** the inline-Cilium manifest. Cilium (the CNI *application*)
+   is installed post-bootstrap via `helm` and adopted by Argo, not baked into this
+   config — see §5.1 and `docs/design/cilium-cni-install.md` in home-cluster.
 
 The rendered config (secret-bearing) is written only to Matchbox for the node to
 fetch over the LAN — never to bbolt, never to `Export` (unchanged invariant).
+
+### 5.1 The CNI comes up *after* Medea's job (the bootstrap paradox)
+
+With `cni: none`, the CP boots and etcd/apiserver come up, but the **node stays
+NotReady until a CNI is installed** — no CNI is baked in anymore. That install is
+*not* Medea's responsibility (Medea stays CNI-agnostic). `helm install cilium`
+works during the bootstrap window because it talks to the apiserver (a host-network
+static pod, reachable before any CNI); Argo cannot be the *first* installer (its
+pods need a CNI to schedule). So:
+
+- **Medea's `AwaitingHealthy` gate is "etcd up + apiserver responding", not "node
+  Ready"** — it must not wait for a CNI it doesn't install, or the phase would hang.
+  `FetchingKubeconfig` succeeds off the apiserver regardless of node Ready.
+- The Cilium install is an **external step** owned by home-cluster: either a
+  CI/`make` step after `cluster create` reports healthy (**B1**, simplest), or a
+  future **generic Medea post-bootstrap hook** home-cluster fills in (**B2**,
+  keeps the flow fully automated without making Medea Cilium-aware). B1 first.
+- Argo later **adopts** the same Helm release (name `cilium`, ns `kube-system`,
+  same values). Full rationale + the home-cluster changes: `docs/design/cilium-cni-install.md`.
 
 ## 6. Client credentials
 
@@ -168,8 +213,10 @@ medea cluster create --name home \
   --cp-mac <mac> --cp-ip 192.168.14.160 \
   --talos-version v1.13.5 --kubernetes-version v1.36.1 \
   --extensions siderolabs/iscsi-tools,siderolabs/util-linux-tools \
-  --patch @talos/patches/controlplane.yaml --patch @talos/patches/cilium-inline.yaml
-      # PLAN: shows the endpoint, schematic, patches, and steps; creates nothing.
+  --cni none --disable-kube-proxy \
+  --patch @talos/patches/longhorn.yaml
+      # PLAN: shows the endpoint, schematic, cni, patches, and steps; creates nothing.
+      # Cilium itself is NOT passed here — it's installed post-bootstrap (§5.1).
 medea cluster create ... --confirm
       # creates the Cluster record in NotBootstrapped and arms the phase.
 ```
@@ -193,9 +240,12 @@ progress is watchable (`-w`).
 
 - **Phase location** — RESOLVED (B-M2): a separate `ClusterBootstrap` record
   (like `ClusterRollout`), for a clean event + resume story.
-- **Patch supply** — patches inline in the create spec vs a reference Medea reads.
-  Inline is simplest for B; a referenced desired-config is the config-rollout
-  feature's job.
+- **Patch supply** — RESOLVED (2026-07-05): the CNI is a **typed option**
+  (`--cni`/`--disable-kube-proxy`), not a patch; the CNI *application* (Cilium) is
+  installed post-bootstrap and adopted by Argo, not baked in (§5.1,
+  `docs/design/cilium-cni-install.md`). Only genuinely node-level remainders (the
+  Longhorn mount) are supplied as inline `--patch @file`. A referenced
+  desired-config is still the config-rollout feature's job.
 - **Idempotent re-run** of a partially-bootstrapped cluster — resume from the
   persisted phase (preferred) vs require an explicit wipe/reset first.
 - **Disk-not-empty** — a re-used node may boot the old install instead of PXE;

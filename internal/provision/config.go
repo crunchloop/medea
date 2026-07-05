@@ -10,6 +10,7 @@ package provision
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/configpatcher"
@@ -102,9 +103,20 @@ type ControlPlaneConfigInput struct {
 	// AllowSchedulingOnControlPlanes lets the single CP run workloads (the homelab
 	// case). Redundant if a patch already sets it, but explicit here.
 	AllowSchedulingOnControlPlanes bool
-	// Patches are optional gen-config patches applied on top (the talos/patches/*
-	// layer: CNI-none + the inline-Cilium manifest, kube-proxy off, etc.). Strategic
-	// merge or JSON6902, same as `talosctl gen config --config-patch`.
+	// CNI selects the cluster CNI (cluster.network.cni.name). Empty = Talos default
+	// (Flannel). "none" = bring-your-own CNI (e.g. Cilium installed post-bootstrap;
+	// see design/cluster-bootstrap.md §5.1). A typed intent Medea absorbs — the CNI
+	// *application* is NOT rendered here.
+	CNI string
+	// DisableKubeProxy disables the stock kube-proxy (cluster.proxy.disabled) so the
+	// CNI can take it over (e.g. Cilium's kube-proxy replacement). Typed intent,
+	// paired with CNI for a BYO-CNI cluster.
+	DisableKubeProxy bool
+	// Patches are optional node-level gen-config patches applied on top (the small
+	// remainder of the talos/patches/* layer that has no typed option, e.g. the
+	// Longhorn kubelet extraMount). Strategic merge or JSON6902, same as
+	// `talosctl gen config --config-patch`. The CNI/proxy settings above are NOT
+	// supplied here — Medea builds that patch itself from CNI/DisableKubeProxy.
 	Patches [][]byte
 }
 
@@ -143,10 +155,37 @@ func RenderControlPlaneConfig(in ControlPlaneConfigInput) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(in.Patches) == 0 {
+
+	// The CNI/proxy patch (Medea's typed intent) is applied before the caller's
+	// node-level patches, so a caller patch could still override it if it must.
+	patches := in.Patches
+	if p := cniProxyPatch(in.CNI, in.DisableKubeProxy); p != nil {
+		patches = append([][]byte{p}, patches...)
+	}
+	if len(patches) == 0 {
 		return out, nil
 	}
-	return applyPatches(out, in.Patches)
+	return applyPatches(out, patches)
+}
+
+// cniProxyPatch builds the small strategic-merge patch that expresses Medea's
+// typed bring-your-own-CNI intent — `cluster.network.cni.name` and/or
+// `cluster.proxy.disabled`. This is the settings half of the retired
+// talos/patches/controlplane.yaml, now owned by Medea rather than supplied by the
+// caller. Returns nil when neither is requested.
+func cniProxyPatch(cni string, disableKubeProxy bool) []byte {
+	if cni == "" && !disableKubeProxy {
+		return nil
+	}
+	var b strings.Builder
+	b.WriteString("cluster:\n")
+	if cni != "" {
+		fmt.Fprintf(&b, "  network:\n    cni:\n      name: %s\n", cni)
+	}
+	if disableKubeProxy {
+		b.WriteString("  proxy:\n    disabled: true\n")
+	}
+	return []byte(b.String())
 }
 
 // Talosconfig produces the admin talosconfig (Talos API client creds) for a
