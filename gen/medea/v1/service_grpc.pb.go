@@ -42,6 +42,7 @@ const (
 	Medea_ListRollouts_FullMethodName        = "/medea.v1.Medea/ListRollouts"
 	Medea_RegisterHost_FullMethodName        = "/medea.v1.Medea/RegisterHost"
 	Medea_DeregisterHost_FullMethodName      = "/medea.v1.Medea/DeregisterHost"
+	Medea_CreateCluster_FullMethodName       = "/medea.v1.Medea/CreateCluster"
 	Medea_Watch_FullMethodName               = "/medea.v1.Medea/Watch"
 )
 
@@ -75,6 +76,9 @@ type MedeaClient interface {
 	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
 	RegisterHost(ctx context.Context, in *RegisterHostRequest, opts ...grpc.CallOption) (*Host, error)
 	DeregisterHost(ctx context.Context, in *DeregisterHostRequest, opts ...grpc.CallOption) (*DeregisterHostResponse, error)
+	// Create a NEW cluster, Medea-driven (design/cluster-bootstrap.md §7). Plan by
+	// default; confirm=true arms the ClusterBootstrap the executor then drives.
+	CreateCluster(ctx context.Context, in *CreateClusterRequest, opts ...grpc.CallOption) (*ClusterBootstrap, error)
 	// --- watch ---
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
@@ -277,6 +281,16 @@ func (c *medeaClient) DeregisterHost(ctx context.Context, in *DeregisterHostRequ
 	return out, nil
 }
 
+func (c *medeaClient) CreateCluster(ctx context.Context, in *CreateClusterRequest, opts ...grpc.CallOption) (*ClusterBootstrap, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClusterBootstrap)
+	err := c.cc.Invoke(ctx, Medea_CreateCluster_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *medeaClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Medea_ServiceDesc.Streams[0], Medea_Watch_FullMethodName, cOpts...)
@@ -326,6 +340,9 @@ type MedeaServer interface {
 	// --- provisioning inventory (v2, design/provisioning-plane.md) ---
 	RegisterHost(context.Context, *RegisterHostRequest) (*Host, error)
 	DeregisterHost(context.Context, *DeregisterHostRequest) (*DeregisterHostResponse, error)
+	// Create a NEW cluster, Medea-driven (design/cluster-bootstrap.md §7). Plan by
+	// default; confirm=true arms the ClusterBootstrap the executor then drives.
+	CreateCluster(context.Context, *CreateClusterRequest) (*ClusterBootstrap, error)
 	// --- watch ---
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedMedeaServer()
@@ -394,6 +411,9 @@ func (UnimplementedMedeaServer) RegisterHost(context.Context, *RegisterHostReque
 }
 func (UnimplementedMedeaServer) DeregisterHost(context.Context, *DeregisterHostRequest) (*DeregisterHostResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeregisterHost not implemented")
+}
+func (UnimplementedMedeaServer) CreateCluster(context.Context, *CreateClusterRequest) (*ClusterBootstrap, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCluster not implemented")
 }
 func (UnimplementedMedeaServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
@@ -761,6 +781,24 @@ func _Medea_DeregisterHost_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Medea_CreateCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).CreateCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_CreateCluster_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).CreateCluster(ctx, req.(*CreateClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Medea_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -854,6 +892,10 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeregisterHost",
 			Handler:    _Medea_DeregisterHost_Handler,
+		},
+		{
+			MethodName: "CreateCluster",
+			Handler:    _Medea_CreateCluster_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

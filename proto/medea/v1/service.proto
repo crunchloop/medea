@@ -40,6 +40,10 @@ service Medea {
   rpc RegisterHost(RegisterHostRequest) returns (Host);
   rpc DeregisterHost(DeregisterHostRequest) returns (DeregisterHostResponse);
 
+  // Create a NEW cluster, Medea-driven (design/cluster-bootstrap.md §7). Plan by
+  // default; confirm=true arms the ClusterBootstrap the executor then drives.
+  rpc CreateCluster(CreateClusterRequest) returns (ClusterBootstrap);
+
   // --- watch ---
   rpc Watch(WatchRequest) returns (stream WatchEvent);
 }
@@ -106,6 +110,18 @@ message GetCredentialsResponse {
   bytes talosconfig = 1;
   bytes kubeconfig = 2;
   bytes secrets = 3;
+}
+
+message CreateClusterRequest {
+  string name = 1;
+  string cp_endpoint = 2;          // https://<cp-ip>:6443
+  string cp_mac = 3;               // the control-plane host's NIC MAC
+  string cp_ip = 4;                // pinned control-plane IP (DHCP reservation)
+  string talos_version = 5;
+  string kubernetes_version = 6;
+  string install_disk = 7;
+  repeated string extensions = 8;  // schematic extension set (empty = stock)
+  bool confirm = 9;                // false = plan (nothing persisted)
 }
 
 message GetRolloutRequest {

@@ -126,6 +126,50 @@ func TestGetCredentialsNoStore(t *testing.T) {
 	}
 }
 
+func TestCreateClusterPlanAndConfirm(t *testing.T) {
+	ctx := context.Background()
+	c, st := newClient(t, serverToken)
+
+	req := &pb.CreateClusterRequest{
+		Name: "home", CpEndpoint: "https://10.0.0.2:6443", CpMac: "aa:bb", CpIp: "10.0.0.2",
+		TalosVersion: "v1.13.5", KubernetesVersion: "v1.36.1", InstallDisk: "/dev/nvme0n1",
+	}
+
+	// Plan (default): returns the record but persists nothing.
+	cb, err := c.CreateCluster(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cb.GetPhase() != pb.ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED {
+		t.Fatalf("plan phase = %v", cb.GetPhase())
+	}
+	if got, _ := st.GetClusterBootstrap("home"); got != nil {
+		t.Fatal("plan persisted a bootstrap record")
+	}
+
+	// Confirm: creates the bootstrap + registers the control-plane host.
+	req.Confirm = true
+	if _, err := c.CreateCluster(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetClusterBootstrap("home"); got == nil {
+		t.Fatal("confirm did not persist a bootstrap record")
+	}
+	if h, _, _ := st.GetHost("home", "aa:bb"); h == nil {
+		t.Fatal("confirm did not register the control-plane host")
+	}
+
+	// Duplicate create is refused.
+	if _, err := c.CreateCluster(ctx, req); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("duplicate create: code=%v want FailedPrecondition", status.Code(err))
+	}
+
+	// Missing required fields.
+	if _, err := c.CreateCluster(ctx, &pb.CreateClusterRequest{Name: "x"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("missing fields: code=%v want InvalidArgument", status.Code(err))
+	}
+}
+
 func TestAuth(t *testing.T) {
 	ctx := context.Background()
 

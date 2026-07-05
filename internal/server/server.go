@@ -116,6 +116,60 @@ func (s *Server) GetCredentials(_ context.Context, req *pb.GetCredentialsRequest
 	return resp, nil
 }
 
+// CreateCluster arms a Medea-driven bootstrap of a NEW cluster
+// (design/cluster-bootstrap.md §7). Plan by default (returns the ClusterBootstrap
+// that WOULD be created; nothing persisted); confirm=true registers the
+// control-plane Host + arms the bootstrap the executor (serve --bootstrap) drives.
+func (s *Server) CreateCluster(_ context.Context, req *pb.CreateClusterRequest) (*pb.ClusterBootstrap, error) {
+	if req.GetName() == "" || req.GetCpEndpoint() == "" || req.GetCpMac() == "" || req.GetCpIp() == "" {
+		return nil, status.Error(codes.InvalidArgument, "name, cp_endpoint, cp_mac and cp_ip are required")
+	}
+	if req.GetTalosVersion() == "" || req.GetKubernetesVersion() == "" {
+		return nil, status.Error(codes.InvalidArgument, "talos_version and kubernetes_version are required")
+	}
+
+	// Refuse if the cluster already exists (seeded inventory or an in-flight bootstrap).
+	if c, _, err := s.store.GetCluster(req.GetName()); err != nil {
+		return nil, mapErr(err)
+	} else if c != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "cluster %q already exists", req.GetName())
+	}
+	if cb, err := s.store.GetClusterBootstrap(req.GetName()); err != nil {
+		return nil, mapErr(err)
+	} else if cb != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "cluster %q already has a bootstrap in progress", req.GetName())
+	}
+
+	cb := &pb.ClusterBootstrap{
+		Cluster:           req.GetName(),
+		Phase:             pb.ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED,
+		CpMac:             req.GetCpMac(),
+		CpEndpoint:        req.GetCpEndpoint(),
+		CpIp:              req.GetCpIp(),
+		TalosVersion:      req.GetTalosVersion(),
+		KubernetesVersion: req.GetKubernetesVersion(),
+		InstallDisk:       req.GetInstallDisk(),
+		Extensions:        req.GetExtensions(),
+	}
+
+	if !req.GetConfirm() {
+		cb.Message = "plan (not created; pass --confirm to arm)"
+		return cb, nil
+	}
+
+	if _, err := s.store.PutHostDesired(&pb.Host{
+		Cluster: req.GetName(), Mac: req.GetCpMac(), Pool: "controlplane",
+		Role: pb.Role_ROLE_CONTROLPLANE, State: pb.HostState_HOST_STATE_REGISTERED,
+	}, 0); err != nil {
+		return nil, mapErr(err)
+	}
+	cb.Message = "armed; awaiting the bootstrap executor"
+	if err := s.store.PutClusterBootstrap(cb); err != nil {
+		return nil, mapErr(err)
+	}
+	return cb, nil
+}
+
 func (s *Server) ListClusters(_ context.Context, _ *pb.ListClustersRequest) (*pb.ListClustersResponse, error) {
 	cs, err := s.store.ListClusters()
 	if err != nil {

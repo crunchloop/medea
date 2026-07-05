@@ -25,6 +25,7 @@ import (
 	"github.com/crunchloop/medea/internal/rollout"
 	"github.com/crunchloop/medea/internal/server"
 	"github.com/crunchloop/medea/internal/store"
+	"github.com/crunchloop/medea/internal/talos"
 	"github.com/crunchloop/medea/internal/talos/k8supgrade"
 	"github.com/crunchloop/medea/internal/tlsgen"
 )
@@ -43,6 +44,20 @@ func k8sUpgraderFactory(cs creds.Store) rollout.K8sFactory {
 			return nil, nil, err
 		}
 		return up, func() {}, nil
+	}
+}
+
+// bootstrapTalosFactory builds the per-node Talos client the bootstrap reconciler
+// uses (Version/Bootstrap/Kubeconfig). *talos.Client satisfies
+// provision.BootstrapTalos. Lives at the composition root, like the other
+// client factories.
+func bootstrapTalosFactory() provision.BootstrapTalosFactory {
+	return func(talosconfig []byte, node string) (provision.BootstrapTalos, func(), error) {
+		tc, err := talos.New(context.Background(), talosconfig, []string{node})
+		if err != nil {
+			return nil, nil, err
+		}
+		return tc, func() { _ = tc.Close() }, nil
 	}
 }
 
@@ -69,6 +84,9 @@ var (
 	serveInstallDisk   string
 	serveProvisionIntv time.Duration
 	serveProvisionTO   time.Duration
+
+	serveBootstrap     bool
+	serveBootstrapIntv time.Duration
 )
 
 func init() {
@@ -100,6 +118,8 @@ func init() {
 	f.StringVar(&serveInstallDisk, "install-disk", "/dev/sda", "install disk for provisioned nodes")
 	f.DurationVar(&serveProvisionIntv, "provision-interval", 30*time.Second, "how often the provisioning executor reconciles")
 	f.DurationVar(&serveProvisionTO, "provision-timeout", 20*time.Minute, "how long a host may stay provisioning before it is marked failed")
+	f.BoolVar(&serveBootstrap, "bootstrap", false, "enable the cluster-bootstrap executor (Medea-driven new-cluster creation; default off)")
+	f.DurationVar(&serveBootstrapIntv, "bootstrap-interval", 30*time.Second, "how often the bootstrap executor advances in-flight cluster creations")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -183,6 +203,25 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintln(os.Stderr, "medea: provisioning executor ENABLED (per-cluster provisioning-enabled still required)")
 	} else {
 		fmt.Fprintln(os.Stderr, "medea: provisioning executor disabled (pass --provisioning to enable)")
+	}
+
+	// Bootstrap executor: global gate, default off. Drives Medea-driven creation
+	// of new clusters armed via `medea cluster create --confirm`
+	// (design/cluster-bootstrap.md).
+	if serveBootstrap {
+		if serveMatchboxDir == "" || serveMatchboxURL == "" {
+			return fmt.Errorf("--bootstrap requires --matchbox-dir and --matchbox-url")
+		}
+		mb, err := matchbox.New(serveMatchboxDir, serveMatchboxURL)
+		if err != nil {
+			return fmt.Errorf("matchbox: %w", err)
+		}
+		br := provision.NewBootstrapReconciler(st, mb, provision.NewFactoryClient(serveFactoryHost),
+			cs, bootstrapTalosFactory(), serveFactoryHost, 0)
+		go provision.NewBootstrapExecutor(st, br, serveBootstrapIntv).Run(ctx)
+		fmt.Fprintln(os.Stderr, "medea: bootstrap executor ENABLED (Medea-driven cluster creation)")
+	} else {
+		fmt.Fprintln(os.Stderr, "medea: bootstrap executor disabled (pass --bootstrap to enable)")
 	}
 
 	errCh := make(chan error, 1)
