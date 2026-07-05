@@ -1,6 +1,6 @@
 # New-cluster bootstrap — Medea-driven cluster creation (Phase B)
 
-**Status:** Draft for review
+**Status:** B-M1 + B-M2 implemented (single-CP); B-M3 (QEMU validation) pending
 **Date:** 2026-07-04
 
 Scope: Medea creates a **new single-control-plane Talos cluster from bare metal** —
@@ -191,9 +191,8 @@ progress is watchable (`-w`).
 
 ## 9. Open questions
 
-- **Phase location** — a `ClusterBootstrap` record (like `ClusterRollout`) vs a
-  `bootstrap_phase` field on `Cluster`. Lean separate record for a clean event +
-  resume story.
+- **Phase location** — RESOLVED (B-M2): a separate `ClusterBootstrap` record
+  (like `ClusterRollout`), for a clean event + resume story.
 - **Patch supply** — patches inline in the create spec vs a reference Medea reads.
   Inline is simplest for B; a referenced desired-config is the config-rollout
   feature's job.
