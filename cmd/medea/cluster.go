@@ -56,15 +56,46 @@ func init() {
 	cf.StringArrayVar(&ccPatches, "patch", nil, "node-level gen-config patch file, @path (repeatable); NOT the CNI application")
 	cf.BoolVar(&ccConfirm, "confirm", false, "arm the bootstrap (default: plan only)")
 
-	clusterCmd.AddCommand(enable, disable, enableProv, disableProv, create)
+	del := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a cluster from Medea (records + credentials); does NOT reset the nodes",
+		Long: "Forget a cluster: remove ALL of Medea's records for it (desired state, " +
+			"rollout state incl. any failed/in-flight bootstrap, provisioning hosts) and its " +
+			"stored credentials, so the name can be re-created cleanly. This does NOT touch the " +
+			"running nodes — reset them separately (talosctl). Requires --yes.",
+		Args: cobra.ExactArgs(1),
+		RunE: runDeleteCluster,
+	}
+	del.Flags().BoolVar(&ccYes, "yes", false, "confirm deletion (required; this is destructive to Medea's state)")
+
+	clusterCmd.AddCommand(enable, disable, enableProv, disableProv, create, del)
 	rootCmd.AddCommand(clusterCmd)
 }
 
 var (
 	ccEndpoint, ccMac, ccIP, ccTalos, ccK8s, ccDisk, ccCNI string
 	ccExtensions, ccPatches                                []string
-	ccDisableKubeProxy, ccConfirm                          bool
+	ccDisableKubeProxy, ccConfirm, ccYes                   bool
 )
+
+func runDeleteCluster(_ *cobra.Command, args []string) error {
+	if !ccYes {
+		return fmt.Errorf("refusing to delete cluster %q without --yes (removes Medea's records + credentials)", args[0])
+	}
+	c, closeFn, err := dial()
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	ctx, cancel := cmdContext()
+	defer cancel()
+
+	if _, err := c.DeleteCluster(ctx, &pb.DeleteClusterRequest{Name: args[0]}); err != nil {
+		return err
+	}
+	fmt.Printf("deleted cluster %q from Medea (records + credentials). The nodes are untouched — reset them separately.\n", args[0])
+	return nil
+}
 
 func runCreateCluster(_ *cobra.Command, args []string) error {
 	patches, err := readPatchFiles(ccPatches)

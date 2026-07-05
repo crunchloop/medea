@@ -593,6 +593,86 @@ func (*DeregisterHostResponse) Descriptor() ([]byte, []int) {
 	return file_medea_v1_service_proto_rawDescGZIP(), []int{11}
 }
 
+type DeleteClusterRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteClusterRequest) Reset() {
+	*x = DeleteClusterRequest{}
+	mi := &file_medea_v1_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteClusterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteClusterRequest) ProtoMessage() {}
+
+func (x *DeleteClusterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_medea_v1_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteClusterRequest.ProtoReflect.Descriptor instead.
+func (*DeleteClusterRequest) Descriptor() ([]byte, []int) {
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeleteClusterRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteClusterResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteClusterResponse) Reset() {
+	*x = DeleteClusterResponse{}
+	mi := &file_medea_v1_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteClusterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteClusterResponse) ProtoMessage() {}
+
+func (x *DeleteClusterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_medea_v1_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteClusterResponse.ProtoReflect.Descriptor instead.
+func (*DeleteClusterResponse) Descriptor() ([]byte, []int) {
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{13}
+}
+
 type GetCredentialsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Cluster       string                 `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
@@ -605,7 +685,7 @@ type GetCredentialsRequest struct {
 
 func (x *GetCredentialsRequest) Reset() {
 	*x = GetCredentialsRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[12]
+	mi := &file_medea_v1_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -617,7 +697,7 @@ func (x *GetCredentialsRequest) String() string {
 func (*GetCredentialsRequest) ProtoMessage() {}
 
 func (x *GetCredentialsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[12]
+	mi := &file_medea_v1_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,7 +710,7 @@ func (x *GetCredentialsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCredentialsRequest.ProtoReflect.Descriptor instead.
 func (*GetCredentialsRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{12}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetCredentialsRequest) GetCluster() string {
@@ -672,7 +752,7 @@ type GetCredentialsResponse struct {
 
 func (x *GetCredentialsResponse) Reset() {
 	*x = GetCredentialsResponse{}
-	mi := &file_medea_v1_service_proto_msgTypes[13]
+	mi := &file_medea_v1_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -684,7 +764,7 @@ func (x *GetCredentialsResponse) String() string {
 func (*GetCredentialsResponse) ProtoMessage() {}
 
 func (x *GetCredentialsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[13]
+	mi := &file_medea_v1_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -697,7 +777,7 @@ func (x *GetCredentialsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCredentialsResponse.ProtoReflect.Descriptor instead.
 func (*GetCredentialsResponse) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{13}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetCredentialsResponse) GetTalosconfig() []byte {
@@ -741,7 +821,7 @@ type CreateClusterRequest struct {
 
 func (x *CreateClusterRequest) Reset() {
 	*x = CreateClusterRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[14]
+	mi := &file_medea_v1_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -753,7 +833,7 @@ func (x *CreateClusterRequest) String() string {
 func (*CreateClusterRequest) ProtoMessage() {}
 
 func (x *CreateClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[14]
+	mi := &file_medea_v1_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -766,7 +846,7 @@ func (x *CreateClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateClusterRequest.ProtoReflect.Descriptor instead.
 func (*CreateClusterRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{14}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CreateClusterRequest) GetName() string {
@@ -863,7 +943,7 @@ type GetRolloutRequest struct {
 
 func (x *GetRolloutRequest) Reset() {
 	*x = GetRolloutRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[15]
+	mi := &file_medea_v1_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -875,7 +955,7 @@ func (x *GetRolloutRequest) String() string {
 func (*GetRolloutRequest) ProtoMessage() {}
 
 func (x *GetRolloutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[15]
+	mi := &file_medea_v1_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -888,7 +968,7 @@ func (x *GetRolloutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRolloutRequest.ProtoReflect.Descriptor instead.
 func (*GetRolloutRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{15}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetRolloutRequest) GetCluster() string {
@@ -915,7 +995,7 @@ type GetRolloutResponse struct {
 
 func (x *GetRolloutResponse) Reset() {
 	*x = GetRolloutResponse{}
-	mi := &file_medea_v1_service_proto_msgTypes[16]
+	mi := &file_medea_v1_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -927,7 +1007,7 @@ func (x *GetRolloutResponse) String() string {
 func (*GetRolloutResponse) ProtoMessage() {}
 
 func (x *GetRolloutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[16]
+	mi := &file_medea_v1_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -940,7 +1020,7 @@ func (x *GetRolloutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRolloutResponse.ProtoReflect.Descriptor instead.
 func (*GetRolloutResponse) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{16}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetRolloutResponse) GetClusterRollout() *ClusterRollout {
@@ -969,7 +1049,7 @@ type SetClusterVersionsRequest struct {
 
 func (x *SetClusterVersionsRequest) Reset() {
 	*x = SetClusterVersionsRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[17]
+	mi := &file_medea_v1_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -981,7 +1061,7 @@ func (x *SetClusterVersionsRequest) String() string {
 func (*SetClusterVersionsRequest) ProtoMessage() {}
 
 func (x *SetClusterVersionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[17]
+	mi := &file_medea_v1_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -994,7 +1074,7 @@ func (x *SetClusterVersionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetClusterVersionsRequest.ProtoReflect.Descriptor instead.
 func (*SetClusterVersionsRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{17}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SetClusterVersionsRequest) GetCluster() string {
@@ -1037,7 +1117,7 @@ type SetNodePoolVersionRequest struct {
 
 func (x *SetNodePoolVersionRequest) Reset() {
 	*x = SetNodePoolVersionRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[18]
+	mi := &file_medea_v1_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1049,7 +1129,7 @@ func (x *SetNodePoolVersionRequest) String() string {
 func (*SetNodePoolVersionRequest) ProtoMessage() {}
 
 func (x *SetNodePoolVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[18]
+	mi := &file_medea_v1_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1062,7 +1142,7 @@ func (x *SetNodePoolVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodePoolVersionRequest.ProtoReflect.Descriptor instead.
 func (*SetNodePoolVersionRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{18}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SetNodePoolVersionRequest) GetCluster() string {
@@ -1102,7 +1182,7 @@ type SetVersionsResponse struct {
 
 func (x *SetVersionsResponse) Reset() {
 	*x = SetVersionsResponse{}
-	mi := &file_medea_v1_service_proto_msgTypes[19]
+	mi := &file_medea_v1_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1114,7 +1194,7 @@ func (x *SetVersionsResponse) String() string {
 func (*SetVersionsResponse) ProtoMessage() {}
 
 func (x *SetVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[19]
+	mi := &file_medea_v1_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1127,7 +1207,7 @@ func (x *SetVersionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVersionsResponse.ProtoReflect.Descriptor instead.
 func (*SetVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{19}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SetVersionsResponse) GetRevision() uint64 {
@@ -1147,7 +1227,7 @@ type PauseRolloutRequest struct {
 
 func (x *PauseRolloutRequest) Reset() {
 	*x = PauseRolloutRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[20]
+	mi := &file_medea_v1_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1159,7 +1239,7 @@ func (x *PauseRolloutRequest) String() string {
 func (*PauseRolloutRequest) ProtoMessage() {}
 
 func (x *PauseRolloutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[20]
+	mi := &file_medea_v1_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1172,7 +1252,7 @@ func (x *PauseRolloutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseRolloutRequest.ProtoReflect.Descriptor instead.
 func (*PauseRolloutRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{20}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PauseRolloutRequest) GetCluster() string {
@@ -1199,7 +1279,7 @@ type ResumeRolloutRequest struct {
 
 func (x *ResumeRolloutRequest) Reset() {
 	*x = ResumeRolloutRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[21]
+	mi := &file_medea_v1_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1211,7 +1291,7 @@ func (x *ResumeRolloutRequest) String() string {
 func (*ResumeRolloutRequest) ProtoMessage() {}
 
 func (x *ResumeRolloutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[21]
+	mi := &file_medea_v1_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1224,7 +1304,7 @@ func (x *ResumeRolloutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeRolloutRequest.ProtoReflect.Descriptor instead.
 func (*ResumeRolloutRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{21}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ResumeRolloutRequest) GetCluster() string {
@@ -1250,7 +1330,7 @@ type RolloutControlResponse struct {
 
 func (x *RolloutControlResponse) Reset() {
 	*x = RolloutControlResponse{}
-	mi := &file_medea_v1_service_proto_msgTypes[22]
+	mi := &file_medea_v1_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1262,7 +1342,7 @@ func (x *RolloutControlResponse) String() string {
 func (*RolloutControlResponse) ProtoMessage() {}
 
 func (x *RolloutControlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[22]
+	mi := &file_medea_v1_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1275,7 +1355,7 @@ func (x *RolloutControlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RolloutControlResponse.ProtoReflect.Descriptor instead.
 func (*RolloutControlResponse) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{22}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RolloutControlResponse) GetRevision() uint64 {
@@ -1294,7 +1374,7 @@ type EnableRolloutsRequest struct {
 
 func (x *EnableRolloutsRequest) Reset() {
 	*x = EnableRolloutsRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[23]
+	mi := &file_medea_v1_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1306,7 +1386,7 @@ func (x *EnableRolloutsRequest) String() string {
 func (*EnableRolloutsRequest) ProtoMessage() {}
 
 func (x *EnableRolloutsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[23]
+	mi := &file_medea_v1_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1319,7 +1399,7 @@ func (x *EnableRolloutsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableRolloutsRequest.ProtoReflect.Descriptor instead.
 func (*EnableRolloutsRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{23}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *EnableRolloutsRequest) GetCluster() string {
@@ -1338,7 +1418,7 @@ type EnableProvisioningRequest struct {
 
 func (x *EnableProvisioningRequest) Reset() {
 	*x = EnableProvisioningRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[24]
+	mi := &file_medea_v1_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1350,7 +1430,7 @@ func (x *EnableProvisioningRequest) String() string {
 func (*EnableProvisioningRequest) ProtoMessage() {}
 
 func (x *EnableProvisioningRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[24]
+	mi := &file_medea_v1_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1363,7 +1443,7 @@ func (x *EnableProvisioningRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableProvisioningRequest.ProtoReflect.Descriptor instead.
 func (*EnableProvisioningRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{24}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *EnableProvisioningRequest) GetCluster() string {
@@ -1386,7 +1466,7 @@ type CreateRolloutRequest struct {
 
 func (x *CreateRolloutRequest) Reset() {
 	*x = CreateRolloutRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[25]
+	mi := &file_medea_v1_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1398,7 +1478,7 @@ func (x *CreateRolloutRequest) String() string {
 func (*CreateRolloutRequest) ProtoMessage() {}
 
 func (x *CreateRolloutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[25]
+	mi := &file_medea_v1_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1411,7 +1491,7 @@ func (x *CreateRolloutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRolloutRequest.ProtoReflect.Descriptor instead.
 func (*CreateRolloutRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{25}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *CreateRolloutRequest) GetCluster() string {
@@ -1458,7 +1538,7 @@ type ListRolloutsRequest struct {
 
 func (x *ListRolloutsRequest) Reset() {
 	*x = ListRolloutsRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[26]
+	mi := &file_medea_v1_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1470,7 +1550,7 @@ func (x *ListRolloutsRequest) String() string {
 func (*ListRolloutsRequest) ProtoMessage() {}
 
 func (x *ListRolloutsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[26]
+	mi := &file_medea_v1_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1483,7 +1563,7 @@ func (x *ListRolloutsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolloutsRequest.ProtoReflect.Descriptor instead.
 func (*ListRolloutsRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{26}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListRolloutsRequest) GetCluster() string {
@@ -1502,7 +1582,7 @@ type ListRolloutsResponse struct {
 
 func (x *ListRolloutsResponse) Reset() {
 	*x = ListRolloutsResponse{}
-	mi := &file_medea_v1_service_proto_msgTypes[27]
+	mi := &file_medea_v1_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1514,7 +1594,7 @@ func (x *ListRolloutsResponse) String() string {
 func (*ListRolloutsResponse) ProtoMessage() {}
 
 func (x *ListRolloutsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[27]
+	mi := &file_medea_v1_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1527,7 +1607,7 @@ func (x *ListRolloutsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolloutsResponse.ProtoReflect.Descriptor instead.
 func (*ListRolloutsResponse) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{27}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListRolloutsResponse) GetRollouts() []*Rollout {
@@ -1546,7 +1626,7 @@ type WatchRequest struct {
 
 func (x *WatchRequest) Reset() {
 	*x = WatchRequest{}
-	mi := &file_medea_v1_service_proto_msgTypes[28]
+	mi := &file_medea_v1_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1558,7 +1638,7 @@ func (x *WatchRequest) String() string {
 func (*WatchRequest) ProtoMessage() {}
 
 func (x *WatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[28]
+	mi := &file_medea_v1_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1571,7 +1651,7 @@ func (x *WatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchRequest.ProtoReflect.Descriptor instead.
 func (*WatchRequest) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{28}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *WatchRequest) GetSinceRevision() uint64 {
@@ -1592,7 +1672,7 @@ type WatchEvent struct {
 
 func (x *WatchEvent) Reset() {
 	*x = WatchEvent{}
-	mi := &file_medea_v1_service_proto_msgTypes[29]
+	mi := &file_medea_v1_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1604,7 +1684,7 @@ func (x *WatchEvent) String() string {
 func (*WatchEvent) ProtoMessage() {}
 
 func (x *WatchEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_service_proto_msgTypes[29]
+	mi := &file_medea_v1_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1617,7 +1697,7 @@ func (x *WatchEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchEvent.ProtoReflect.Descriptor instead.
 func (*WatchEvent) Descriptor() ([]byte, []int) {
-	return file_medea_v1_service_proto_rawDescGZIP(), []int{29}
+	return file_medea_v1_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *WatchEvent) GetKind() string {
@@ -1678,7 +1758,10 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"\x15DeregisterHostRequest\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\"\x18\n" +
-	"\x16DeregisterHostResponse\"\x8d\x01\n" +
+	"\x16DeregisterHostResponse\"*\n" +
+	"\x14DeleteClusterRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\x17\n" +
+	"\x15DeleteClusterResponse\"\x8d\x01\n" +
 	"\x15GetCredentialsRequest\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12 \n" +
 	"\vtalosconfig\x18\x02 \x01(\bR\vtalosconfig\x12\x1e\n" +
@@ -1759,7 +1842,7 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"WatchEvent\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x1a\n" +
-	"\brevision\x18\x03 \x01(\x04R\brevision2\xc8\f\n" +
+	"\brevision\x18\x03 \x01(\x04R\brevision2\x9a\r\n" +
 	"\x05Medea\x12<\n" +
 	"\n" +
 	"GetCluster\x12\x1b.medea.v1.GetClusterRequest\x1a\x11.medea.v1.Cluster\x12M\n" +
@@ -1782,7 +1865,8 @@ const file_medea_v1_service_proto_rawDesc = "" +
 	"\fListRollouts\x12\x1d.medea.v1.ListRolloutsRequest\x1a\x1e.medea.v1.ListRolloutsResponse\x12=\n" +
 	"\fRegisterHost\x12\x1d.medea.v1.RegisterHostRequest\x1a\x0e.medea.v1.Host\x12S\n" +
 	"\x0eDeregisterHost\x12\x1f.medea.v1.DeregisterHostRequest\x1a .medea.v1.DeregisterHostResponse\x12K\n" +
-	"\rCreateCluster\x12\x1e.medea.v1.CreateClusterRequest\x1a\x1a.medea.v1.ClusterBootstrap\x127\n" +
+	"\rCreateCluster\x12\x1e.medea.v1.CreateClusterRequest\x1a\x1a.medea.v1.ClusterBootstrap\x12P\n" +
+	"\rDeleteCluster\x12\x1e.medea.v1.DeleteClusterRequest\x1a\x1f.medea.v1.DeleteClusterResponse\x127\n" +
 	"\x05Watch\x12\x16.medea.v1.WatchRequest\x1a\x14.medea.v1.WatchEvent0\x01B2Z0github.com/crunchloop/medea/gen/medea/v1;medeav1b\x06proto3"
 
 var (
@@ -1797,7 +1881,7 @@ func file_medea_v1_service_proto_rawDescGZIP() []byte {
 	return file_medea_v1_service_proto_rawDescData
 }
 
-var file_medea_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_medea_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_medea_v1_service_proto_goTypes = []any{
 	(*GetClusterRequest)(nil),         // 0: medea.v1.GetClusterRequest
 	(*ListClustersRequest)(nil),       // 1: medea.v1.ListClustersRequest
@@ -1811,91 +1895,95 @@ var file_medea_v1_service_proto_goTypes = []any{
 	(*RegisterHostRequest)(nil),       // 9: medea.v1.RegisterHostRequest
 	(*DeregisterHostRequest)(nil),     // 10: medea.v1.DeregisterHostRequest
 	(*DeregisterHostResponse)(nil),    // 11: medea.v1.DeregisterHostResponse
-	(*GetCredentialsRequest)(nil),     // 12: medea.v1.GetCredentialsRequest
-	(*GetCredentialsResponse)(nil),    // 13: medea.v1.GetCredentialsResponse
-	(*CreateClusterRequest)(nil),      // 14: medea.v1.CreateClusterRequest
-	(*GetRolloutRequest)(nil),         // 15: medea.v1.GetRolloutRequest
-	(*GetRolloutResponse)(nil),        // 16: medea.v1.GetRolloutResponse
-	(*SetClusterVersionsRequest)(nil), // 17: medea.v1.SetClusterVersionsRequest
-	(*SetNodePoolVersionRequest)(nil), // 18: medea.v1.SetNodePoolVersionRequest
-	(*SetVersionsResponse)(nil),       // 19: medea.v1.SetVersionsResponse
-	(*PauseRolloutRequest)(nil),       // 20: medea.v1.PauseRolloutRequest
-	(*ResumeRolloutRequest)(nil),      // 21: medea.v1.ResumeRolloutRequest
-	(*RolloutControlResponse)(nil),    // 22: medea.v1.RolloutControlResponse
-	(*EnableRolloutsRequest)(nil),     // 23: medea.v1.EnableRolloutsRequest
-	(*EnableProvisioningRequest)(nil), // 24: medea.v1.EnableProvisioningRequest
-	(*CreateRolloutRequest)(nil),      // 25: medea.v1.CreateRolloutRequest
-	(*ListRolloutsRequest)(nil),       // 26: medea.v1.ListRolloutsRequest
-	(*ListRolloutsResponse)(nil),      // 27: medea.v1.ListRolloutsResponse
-	(*WatchRequest)(nil),              // 28: medea.v1.WatchRequest
-	(*WatchEvent)(nil),                // 29: medea.v1.WatchEvent
-	nil,                               // 30: medea.v1.RegisterHostRequest.LabelsEntry
-	(*Cluster)(nil),                   // 31: medea.v1.Cluster
-	(*NodePool)(nil),                  // 32: medea.v1.NodePool
-	(*Machine)(nil),                   // 33: medea.v1.Machine
-	(*Host)(nil),                      // 34: medea.v1.Host
-	(Role)(0),                         // 35: medea.v1.Role
-	(*ClusterRollout)(nil),            // 36: medea.v1.ClusterRollout
-	(*MachineRollout)(nil),            // 37: medea.v1.MachineRollout
-	(RolloutKind)(0),                  // 38: medea.v1.RolloutKind
-	(*Rollout)(nil),                   // 39: medea.v1.Rollout
-	(*ClusterBootstrap)(nil),          // 40: medea.v1.ClusterBootstrap
+	(*DeleteClusterRequest)(nil),      // 12: medea.v1.DeleteClusterRequest
+	(*DeleteClusterResponse)(nil),     // 13: medea.v1.DeleteClusterResponse
+	(*GetCredentialsRequest)(nil),     // 14: medea.v1.GetCredentialsRequest
+	(*GetCredentialsResponse)(nil),    // 15: medea.v1.GetCredentialsResponse
+	(*CreateClusterRequest)(nil),      // 16: medea.v1.CreateClusterRequest
+	(*GetRolloutRequest)(nil),         // 17: medea.v1.GetRolloutRequest
+	(*GetRolloutResponse)(nil),        // 18: medea.v1.GetRolloutResponse
+	(*SetClusterVersionsRequest)(nil), // 19: medea.v1.SetClusterVersionsRequest
+	(*SetNodePoolVersionRequest)(nil), // 20: medea.v1.SetNodePoolVersionRequest
+	(*SetVersionsResponse)(nil),       // 21: medea.v1.SetVersionsResponse
+	(*PauseRolloutRequest)(nil),       // 22: medea.v1.PauseRolloutRequest
+	(*ResumeRolloutRequest)(nil),      // 23: medea.v1.ResumeRolloutRequest
+	(*RolloutControlResponse)(nil),    // 24: medea.v1.RolloutControlResponse
+	(*EnableRolloutsRequest)(nil),     // 25: medea.v1.EnableRolloutsRequest
+	(*EnableProvisioningRequest)(nil), // 26: medea.v1.EnableProvisioningRequest
+	(*CreateRolloutRequest)(nil),      // 27: medea.v1.CreateRolloutRequest
+	(*ListRolloutsRequest)(nil),       // 28: medea.v1.ListRolloutsRequest
+	(*ListRolloutsResponse)(nil),      // 29: medea.v1.ListRolloutsResponse
+	(*WatchRequest)(nil),              // 30: medea.v1.WatchRequest
+	(*WatchEvent)(nil),                // 31: medea.v1.WatchEvent
+	nil,                               // 32: medea.v1.RegisterHostRequest.LabelsEntry
+	(*Cluster)(nil),                   // 33: medea.v1.Cluster
+	(*NodePool)(nil),                  // 34: medea.v1.NodePool
+	(*Machine)(nil),                   // 35: medea.v1.Machine
+	(*Host)(nil),                      // 36: medea.v1.Host
+	(Role)(0),                         // 37: medea.v1.Role
+	(*ClusterRollout)(nil),            // 38: medea.v1.ClusterRollout
+	(*MachineRollout)(nil),            // 39: medea.v1.MachineRollout
+	(RolloutKind)(0),                  // 40: medea.v1.RolloutKind
+	(*Rollout)(nil),                   // 41: medea.v1.Rollout
+	(*ClusterBootstrap)(nil),          // 42: medea.v1.ClusterBootstrap
 }
 var file_medea_v1_service_proto_depIdxs = []int32{
-	31, // 0: medea.v1.ListClustersResponse.clusters:type_name -> medea.v1.Cluster
-	32, // 1: medea.v1.ListNodePoolsResponse.node_pools:type_name -> medea.v1.NodePool
-	33, // 2: medea.v1.ListMachinesResponse.machines:type_name -> medea.v1.Machine
-	34, // 3: medea.v1.ListHostsResponse.hosts:type_name -> medea.v1.Host
-	35, // 4: medea.v1.RegisterHostRequest.role:type_name -> medea.v1.Role
-	30, // 5: medea.v1.RegisterHostRequest.labels:type_name -> medea.v1.RegisterHostRequest.LabelsEntry
-	36, // 6: medea.v1.GetRolloutResponse.cluster_rollout:type_name -> medea.v1.ClusterRollout
-	37, // 7: medea.v1.GetRolloutResponse.machine_rollouts:type_name -> medea.v1.MachineRollout
-	38, // 8: medea.v1.CreateRolloutRequest.kind:type_name -> medea.v1.RolloutKind
-	39, // 9: medea.v1.ListRolloutsResponse.rollouts:type_name -> medea.v1.Rollout
+	33, // 0: medea.v1.ListClustersResponse.clusters:type_name -> medea.v1.Cluster
+	34, // 1: medea.v1.ListNodePoolsResponse.node_pools:type_name -> medea.v1.NodePool
+	35, // 2: medea.v1.ListMachinesResponse.machines:type_name -> medea.v1.Machine
+	36, // 3: medea.v1.ListHostsResponse.hosts:type_name -> medea.v1.Host
+	37, // 4: medea.v1.RegisterHostRequest.role:type_name -> medea.v1.Role
+	32, // 5: medea.v1.RegisterHostRequest.labels:type_name -> medea.v1.RegisterHostRequest.LabelsEntry
+	38, // 6: medea.v1.GetRolloutResponse.cluster_rollout:type_name -> medea.v1.ClusterRollout
+	39, // 7: medea.v1.GetRolloutResponse.machine_rollouts:type_name -> medea.v1.MachineRollout
+	40, // 8: medea.v1.CreateRolloutRequest.kind:type_name -> medea.v1.RolloutKind
+	41, // 9: medea.v1.ListRolloutsResponse.rollouts:type_name -> medea.v1.Rollout
 	0,  // 10: medea.v1.Medea.GetCluster:input_type -> medea.v1.GetClusterRequest
 	1,  // 11: medea.v1.Medea.ListClusters:input_type -> medea.v1.ListClustersRequest
 	3,  // 12: medea.v1.Medea.ListNodePools:input_type -> medea.v1.ListNodePoolsRequest
 	5,  // 13: medea.v1.Medea.ListMachines:input_type -> medea.v1.ListMachinesRequest
 	7,  // 14: medea.v1.Medea.ListHosts:input_type -> medea.v1.ListHostsRequest
-	15, // 15: medea.v1.Medea.GetRollout:input_type -> medea.v1.GetRolloutRequest
-	12, // 16: medea.v1.Medea.GetCredentials:input_type -> medea.v1.GetCredentialsRequest
-	17, // 17: medea.v1.Medea.SetClusterVersions:input_type -> medea.v1.SetClusterVersionsRequest
-	18, // 18: medea.v1.Medea.SetNodePoolVersion:input_type -> medea.v1.SetNodePoolVersionRequest
-	20, // 19: medea.v1.Medea.PauseRollout:input_type -> medea.v1.PauseRolloutRequest
-	21, // 20: medea.v1.Medea.ResumeRollout:input_type -> medea.v1.ResumeRolloutRequest
-	23, // 21: medea.v1.Medea.EnableRollouts:input_type -> medea.v1.EnableRolloutsRequest
-	23, // 22: medea.v1.Medea.DisableRollouts:input_type -> medea.v1.EnableRolloutsRequest
-	24, // 23: medea.v1.Medea.EnableProvisioning:input_type -> medea.v1.EnableProvisioningRequest
-	24, // 24: medea.v1.Medea.DisableProvisioning:input_type -> medea.v1.EnableProvisioningRequest
-	25, // 25: medea.v1.Medea.CreateRollout:input_type -> medea.v1.CreateRolloutRequest
-	26, // 26: medea.v1.Medea.ListRollouts:input_type -> medea.v1.ListRolloutsRequest
+	17, // 15: medea.v1.Medea.GetRollout:input_type -> medea.v1.GetRolloutRequest
+	14, // 16: medea.v1.Medea.GetCredentials:input_type -> medea.v1.GetCredentialsRequest
+	19, // 17: medea.v1.Medea.SetClusterVersions:input_type -> medea.v1.SetClusterVersionsRequest
+	20, // 18: medea.v1.Medea.SetNodePoolVersion:input_type -> medea.v1.SetNodePoolVersionRequest
+	22, // 19: medea.v1.Medea.PauseRollout:input_type -> medea.v1.PauseRolloutRequest
+	23, // 20: medea.v1.Medea.ResumeRollout:input_type -> medea.v1.ResumeRolloutRequest
+	25, // 21: medea.v1.Medea.EnableRollouts:input_type -> medea.v1.EnableRolloutsRequest
+	25, // 22: medea.v1.Medea.DisableRollouts:input_type -> medea.v1.EnableRolloutsRequest
+	26, // 23: medea.v1.Medea.EnableProvisioning:input_type -> medea.v1.EnableProvisioningRequest
+	26, // 24: medea.v1.Medea.DisableProvisioning:input_type -> medea.v1.EnableProvisioningRequest
+	27, // 25: medea.v1.Medea.CreateRollout:input_type -> medea.v1.CreateRolloutRequest
+	28, // 26: medea.v1.Medea.ListRollouts:input_type -> medea.v1.ListRolloutsRequest
 	9,  // 27: medea.v1.Medea.RegisterHost:input_type -> medea.v1.RegisterHostRequest
 	10, // 28: medea.v1.Medea.DeregisterHost:input_type -> medea.v1.DeregisterHostRequest
-	14, // 29: medea.v1.Medea.CreateCluster:input_type -> medea.v1.CreateClusterRequest
-	28, // 30: medea.v1.Medea.Watch:input_type -> medea.v1.WatchRequest
-	31, // 31: medea.v1.Medea.GetCluster:output_type -> medea.v1.Cluster
-	2,  // 32: medea.v1.Medea.ListClusters:output_type -> medea.v1.ListClustersResponse
-	4,  // 33: medea.v1.Medea.ListNodePools:output_type -> medea.v1.ListNodePoolsResponse
-	6,  // 34: medea.v1.Medea.ListMachines:output_type -> medea.v1.ListMachinesResponse
-	8,  // 35: medea.v1.Medea.ListHosts:output_type -> medea.v1.ListHostsResponse
-	16, // 36: medea.v1.Medea.GetRollout:output_type -> medea.v1.GetRolloutResponse
-	13, // 37: medea.v1.Medea.GetCredentials:output_type -> medea.v1.GetCredentialsResponse
-	19, // 38: medea.v1.Medea.SetClusterVersions:output_type -> medea.v1.SetVersionsResponse
-	19, // 39: medea.v1.Medea.SetNodePoolVersion:output_type -> medea.v1.SetVersionsResponse
-	22, // 40: medea.v1.Medea.PauseRollout:output_type -> medea.v1.RolloutControlResponse
-	22, // 41: medea.v1.Medea.ResumeRollout:output_type -> medea.v1.RolloutControlResponse
-	31, // 42: medea.v1.Medea.EnableRollouts:output_type -> medea.v1.Cluster
-	31, // 43: medea.v1.Medea.DisableRollouts:output_type -> medea.v1.Cluster
-	31, // 44: medea.v1.Medea.EnableProvisioning:output_type -> medea.v1.Cluster
-	31, // 45: medea.v1.Medea.DisableProvisioning:output_type -> medea.v1.Cluster
-	39, // 46: medea.v1.Medea.CreateRollout:output_type -> medea.v1.Rollout
-	27, // 47: medea.v1.Medea.ListRollouts:output_type -> medea.v1.ListRolloutsResponse
-	34, // 48: medea.v1.Medea.RegisterHost:output_type -> medea.v1.Host
-	11, // 49: medea.v1.Medea.DeregisterHost:output_type -> medea.v1.DeregisterHostResponse
-	40, // 50: medea.v1.Medea.CreateCluster:output_type -> medea.v1.ClusterBootstrap
-	29, // 51: medea.v1.Medea.Watch:output_type -> medea.v1.WatchEvent
-	31, // [31:52] is the sub-list for method output_type
-	10, // [10:31] is the sub-list for method input_type
+	16, // 29: medea.v1.Medea.CreateCluster:input_type -> medea.v1.CreateClusterRequest
+	12, // 30: medea.v1.Medea.DeleteCluster:input_type -> medea.v1.DeleteClusterRequest
+	30, // 31: medea.v1.Medea.Watch:input_type -> medea.v1.WatchRequest
+	33, // 32: medea.v1.Medea.GetCluster:output_type -> medea.v1.Cluster
+	2,  // 33: medea.v1.Medea.ListClusters:output_type -> medea.v1.ListClustersResponse
+	4,  // 34: medea.v1.Medea.ListNodePools:output_type -> medea.v1.ListNodePoolsResponse
+	6,  // 35: medea.v1.Medea.ListMachines:output_type -> medea.v1.ListMachinesResponse
+	8,  // 36: medea.v1.Medea.ListHosts:output_type -> medea.v1.ListHostsResponse
+	18, // 37: medea.v1.Medea.GetRollout:output_type -> medea.v1.GetRolloutResponse
+	15, // 38: medea.v1.Medea.GetCredentials:output_type -> medea.v1.GetCredentialsResponse
+	21, // 39: medea.v1.Medea.SetClusterVersions:output_type -> medea.v1.SetVersionsResponse
+	21, // 40: medea.v1.Medea.SetNodePoolVersion:output_type -> medea.v1.SetVersionsResponse
+	24, // 41: medea.v1.Medea.PauseRollout:output_type -> medea.v1.RolloutControlResponse
+	24, // 42: medea.v1.Medea.ResumeRollout:output_type -> medea.v1.RolloutControlResponse
+	33, // 43: medea.v1.Medea.EnableRollouts:output_type -> medea.v1.Cluster
+	33, // 44: medea.v1.Medea.DisableRollouts:output_type -> medea.v1.Cluster
+	33, // 45: medea.v1.Medea.EnableProvisioning:output_type -> medea.v1.Cluster
+	33, // 46: medea.v1.Medea.DisableProvisioning:output_type -> medea.v1.Cluster
+	41, // 47: medea.v1.Medea.CreateRollout:output_type -> medea.v1.Rollout
+	29, // 48: medea.v1.Medea.ListRollouts:output_type -> medea.v1.ListRolloutsResponse
+	36, // 49: medea.v1.Medea.RegisterHost:output_type -> medea.v1.Host
+	11, // 50: medea.v1.Medea.DeregisterHost:output_type -> medea.v1.DeregisterHostResponse
+	42, // 51: medea.v1.Medea.CreateCluster:output_type -> medea.v1.ClusterBootstrap
+	13, // 52: medea.v1.Medea.DeleteCluster:output_type -> medea.v1.DeleteClusterResponse
+	31, // 53: medea.v1.Medea.Watch:output_type -> medea.v1.WatchEvent
+	32, // [32:54] is the sub-list for method output_type
+	10, // [10:32] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -1907,15 +1995,15 @@ func file_medea_v1_service_proto_init() {
 		return
 	}
 	file_medea_v1_medea_proto_init()
-	file_medea_v1_service_proto_msgTypes[17].OneofWrappers = []any{}
-	file_medea_v1_service_proto_msgTypes[18].OneofWrappers = []any{}
+	file_medea_v1_service_proto_msgTypes[19].OneofWrappers = []any{}
+	file_medea_v1_service_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_medea_v1_service_proto_rawDesc), len(file_medea_v1_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

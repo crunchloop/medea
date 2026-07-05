@@ -43,6 +43,7 @@ const (
 	Medea_RegisterHost_FullMethodName        = "/medea.v1.Medea/RegisterHost"
 	Medea_DeregisterHost_FullMethodName      = "/medea.v1.Medea/DeregisterHost"
 	Medea_CreateCluster_FullMethodName       = "/medea.v1.Medea/CreateCluster"
+	Medea_DeleteCluster_FullMethodName       = "/medea.v1.Medea/DeleteCluster"
 	Medea_Watch_FullMethodName               = "/medea.v1.Medea/Watch"
 )
 
@@ -79,6 +80,11 @@ type MedeaClient interface {
 	// Create a NEW cluster, Medea-driven (design/cluster-bootstrap.md §7). Plan by
 	// default; confirm=true arms the ClusterBootstrap the executor then drives.
 	CreateCluster(ctx context.Context, in *CreateClusterRequest, opts ...grpc.CallOption) (*ClusterBootstrap, error)
+	// Delete a cluster from Medea: removes ALL of its records (desired + rollout
+	// state, incl. any in-flight/failed bootstrap and provisioning hosts) and its
+	// stored credentials. The teardown counterpart to CreateCluster — it forgets
+	// the cluster; it does NOT reset the running nodes.
+	DeleteCluster(ctx context.Context, in *DeleteClusterRequest, opts ...grpc.CallOption) (*DeleteClusterResponse, error)
 	// --- watch ---
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
@@ -291,6 +297,16 @@ func (c *medeaClient) CreateCluster(ctx context.Context, in *CreateClusterReques
 	return out, nil
 }
 
+func (c *medeaClient) DeleteCluster(ctx context.Context, in *DeleteClusterRequest, opts ...grpc.CallOption) (*DeleteClusterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteClusterResponse)
+	err := c.cc.Invoke(ctx, Medea_DeleteCluster_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *medeaClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Medea_ServiceDesc.Streams[0], Medea_Watch_FullMethodName, cOpts...)
@@ -343,6 +359,11 @@ type MedeaServer interface {
 	// Create a NEW cluster, Medea-driven (design/cluster-bootstrap.md §7). Plan by
 	// default; confirm=true arms the ClusterBootstrap the executor then drives.
 	CreateCluster(context.Context, *CreateClusterRequest) (*ClusterBootstrap, error)
+	// Delete a cluster from Medea: removes ALL of its records (desired + rollout
+	// state, incl. any in-flight/failed bootstrap and provisioning hosts) and its
+	// stored credentials. The teardown counterpart to CreateCluster — it forgets
+	// the cluster; it does NOT reset the running nodes.
+	DeleteCluster(context.Context, *DeleteClusterRequest) (*DeleteClusterResponse, error)
 	// --- watch ---
 	Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedMedeaServer()
@@ -414,6 +435,9 @@ func (UnimplementedMedeaServer) DeregisterHost(context.Context, *DeregisterHostR
 }
 func (UnimplementedMedeaServer) CreateCluster(context.Context, *CreateClusterRequest) (*ClusterBootstrap, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateCluster not implemented")
+}
+func (UnimplementedMedeaServer) DeleteCluster(context.Context, *DeleteClusterRequest) (*DeleteClusterResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteCluster not implemented")
 }
 func (UnimplementedMedeaServer) Watch(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
@@ -799,6 +823,24 @@ func _Medea_CreateCluster_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Medea_DeleteCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MedeaServer).DeleteCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Medea_DeleteCluster_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MedeaServer).DeleteCluster(ctx, req.(*DeleteClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Medea_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -896,6 +938,10 @@ var Medea_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateCluster",
 			Handler:    _Medea_CreateCluster_Handler,
+		},
+		{
+			MethodName: "DeleteCluster",
+			Handler:    _Medea_DeleteCluster_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
