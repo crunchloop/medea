@@ -211,7 +211,8 @@ magic-packet test; nmap 623/Redfish probe for BMC).
 ## 9. Future work (deferred past v2)
 
 - **New-cluster creation** — first-control-plane bootstrap (gen secrets → apply
-  → `talosctl bootstrap` etcd). The chicken-and-egg no-cluster-yet flow.
+  → `talosctl bootstrap` etcd). The chicken-and-egg no-cluster-yet flow. **Now
+  designed** (single-CP) in [`cluster-bootstrap.md`](cluster-bootstrap.md) (Phase B).
 - **Control-plane node provisioning / HA** — joining additional CP members
   (etcd growth); ties into the non-HA → HA story.
 - **Auto-repair (v4)** — failure detection + the `Power` impl; reprovision a dead
