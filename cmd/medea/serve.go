@@ -19,10 +19,10 @@ import (
 	pb "github.com/crunchloop/medea/gen/medea/v1"
 	"github.com/crunchloop/medea/internal/auth"
 	"github.com/crunchloop/medea/internal/creds"
-	"github.com/crunchloop/medea/internal/refresh"
-	"github.com/crunchloop/medea/internal/rollout"
 	"github.com/crunchloop/medea/internal/provision"
 	"github.com/crunchloop/medea/internal/provision/matchbox"
+	"github.com/crunchloop/medea/internal/refresh"
+	"github.com/crunchloop/medea/internal/rollout"
 	"github.com/crunchloop/medea/internal/server"
 	"github.com/crunchloop/medea/internal/store"
 	"github.com/crunchloop/medea/internal/talos/k8supgrade"
@@ -47,17 +47,20 @@ func k8sUpgraderFactory(cs creds.Store) rollout.K8sFactory {
 }
 
 var (
-	serveListen      string
-	serveStore       string
-	serveToken       string
-	serveTokenFile   string
-	serveCert        string
-	serveKey         string
-	serveCredsDir    string
-	serveRefreshIntv time.Duration
-	serveRollouts    bool
-	serveSnapshotDir string
-	serveRolloutIntv time.Duration
+	serveListen       string
+	serveStore        string
+	serveToken        string
+	serveTokenFile    string
+	serveCert         string
+	serveKey          string
+	serveCredsDir     string
+	serveCredsBackend string
+	serveOpVault      string
+	serveOpTokenFile  string
+	serveRefreshIntv  time.Duration
+	serveRollouts     bool
+	serveSnapshotDir  string
+	serveRolloutIntv  time.Duration
 
 	serveProvisioning  bool
 	serveMatchboxDir   string
@@ -82,7 +85,10 @@ func init() {
 	f.StringVar(&serveTokenFile, "token-file", "", "file containing the bearer token")
 	f.StringVar(&serveCert, "tls-cert", "medea-cert.pem", "TLS cert path (generated if missing)")
 	f.StringVar(&serveKey, "tls-key", "medea-key.pem", "TLS key path (generated if missing)")
-	f.StringVar(&serveCredsDir, "creds-dir", "medea-creds", "directory holding cluster credentials")
+	f.StringVar(&serveCredsDir, "creds-dir", "medea-creds", "directory holding cluster credentials (file backend)")
+	f.StringVar(&serveCredsBackend, "creds-backend", "file", "credential backend: file | onepassword")
+	f.StringVar(&serveOpVault, "op-vault", "Kubernetes", "1Password vault holding cluster creds (onepassword backend)")
+	f.StringVar(&serveOpTokenFile, "op-token-file", "", "file with a 1Password service-account token (onepassword backend)")
 	f.DurationVar(&serveRefreshIntv, "refresh-interval", 30*time.Second, "how often to refresh observed state from clusters")
 	f.BoolVar(&serveRollouts, "rollouts", false, "enable the rollout executor (global gate; default off). Per-cluster rollouts-enabled still required.")
 	f.StringVar(&serveSnapshotDir, "snapshot-dir", "medea-snapshots", "directory for pre-control-plane etcd snapshots")
@@ -141,7 +147,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	defer stop()
 
 	// Refresh loop: rebuild observed state from the clusters (datastore.md §7).
-	cs, err := creds.NewFileStore(serveCredsDir)
+	cs, err := buildCredsStore(ctx)
 	if err != nil {
 		return fmt.Errorf("creds: %w", err)
 	}
@@ -188,6 +194,44 @@ func runServe(_ *cobra.Command, _ []string) error {
 		srv.GracefulStop()
 		return nil
 	}
+}
+
+// buildCredsStore constructs the credential store for the configured backend.
+// The file backend is the default; the onepassword backend keeps creds off the
+// host disk (design/credentials.md §4).
+func buildCredsStore(ctx context.Context) (creds.Store, error) {
+	switch serveCredsBackend {
+	case "", "file":
+		return creds.NewFileStore(serveCredsDir)
+	case "onepassword":
+		tok, err := readTokenFile(serveOpTokenFile, "--op-token-file")
+		if err != nil {
+			return nil, err
+		}
+		v, err := creds.NewOnePasswordSDKVault(ctx, tok)
+		if err != nil {
+			return nil, err
+		}
+		return creds.NewOnePasswordStore(serveOpVault, v), nil
+	default:
+		return nil, fmt.Errorf("unknown --creds-backend %q (want file|onepassword)", serveCredsBackend)
+	}
+}
+
+// readTokenFile reads and trims a required token file, naming the flag in errors.
+func readTokenFile(path, flag string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("%s is required for the onepassword backend", flag)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	t := strings.TrimSpace(string(b))
+	if t == "" {
+		return "", fmt.Errorf("%s is empty", flag)
+	}
+	return t, nil
 }
 
 func resolveToken() (string, error) {

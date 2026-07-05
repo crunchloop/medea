@@ -155,10 +155,11 @@ type CredentialStore interface {
   (`<creds-dir>/<cluster>/{talosconfig,kubeconfig}`), `<creds-dir>` itself
   0700. The `Cluster` record references credentials by cluster name; no secret
   material is stored in or referenced from bbolt beyond that name.
-- **Future:** OS keyring; an external secret store; or sourcing from
-  **1Password** — the cluster already uses 1Password for DR, so a 1Password-backed
-  `CredentialStore` is a natural v2 that removes plaintext creds from disk
-  entirely.
+- **1Password-backed impl — built** (`internal/creds/onepassword*.go`,
+  [`credentials.md`](credentials.md)): one item per cluster in a configured vault,
+  selected via `serve --creds-backend onepassword`. Removes plaintext creds from
+  the host disk and gives the off-host durability that lets `home-cluster`'s
+  `_out/` be retired. Other backends (OS keyring, etc.) remain future work.
 
 The credential store is never serialized by `Export`; it has no export path.
 

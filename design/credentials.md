@@ -73,8 +73,10 @@ aggregates, the reconcilers, or the safety chain.
 A second impl of the existing `creds.Store` interface — chosen by service config,
 so handlers/reconcilers that consume the interface are unchanged.
 
-- **Layout:** one 1Password item per cluster (title `medea/<cluster>`), fields
-  `talosconfig`, `kubeconfig`, `secrets.yaml`; vault configurable (default
+- **Layout:** one 1Password item per cluster (title `medea-<cluster>` — a hyphen,
+  not a slash: `op://` references are slash-delimited, so a slash in the title is
+  unresolvable), fields `talosconfig`, `kubeconfig`, `secrets.yaml`; vault
+  configurable (default
   `Kubernetes`, matching the cluster's existing item conventions). One item keeps
   a cluster's material atomic; three fields avoid extra round-trips.
 - **Selection (service config, `medea.yaml`):**
