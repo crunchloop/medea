@@ -31,13 +31,14 @@ var ErrConflict = errors.New("store: revision conflict")
 type EventKind string
 
 const (
-	KindCluster        EventKind = "cluster"
-	KindNodePool       EventKind = "nodepool"
-	KindMachine        EventKind = "machine"
-	KindHost           EventKind = "host"
-	KindMachineRollout EventKind = "machine_rollout"
-	KindClusterRollout EventKind = "cluster_rollout"
-	KindRolloutJob     EventKind = "rollout_job"
+	KindCluster          EventKind = "cluster"
+	KindNodePool         EventKind = "nodepool"
+	KindMachine          EventKind = "machine"
+	KindHost             EventKind = "host"
+	KindMachineRollout   EventKind = "machine_rollout"
+	KindClusterRollout   EventKind = "cluster_rollout"
+	KindRolloutJob       EventKind = "rollout_job"
+	KindClusterBootstrap EventKind = "cluster_bootstrap"
 )
 
 // Event is published after a persisted write commits (datastore.md §5).
@@ -53,11 +54,12 @@ var (
 	bDesired  = []byte("desired")
 	bRollouts = []byte("rollouts")
 
-	sClusters = []byte("clusters")
-	sNodePool = []byte("nodepools")
-	sMachines = []byte("machines")
-	sHosts    = []byte("hosts")
-	sJobs     = []byte("jobs")
+	sClusters  = []byte("clusters")
+	sNodePool  = []byte("nodepools")
+	sMachines  = []byte("machines")
+	sHosts     = []byte("hosts")
+	sJobs      = []byte("jobs")
+	sBootstrap = []byte("bootstrap")
 
 	kRevision = []byte("revision")
 )
@@ -89,6 +91,10 @@ type Store interface {
 	PutMachineRollout(r *pb.MachineRollout) error
 	GetClusterRollout(cluster string) (*pb.ClusterRollout, error)
 	PutClusterRollout(r *pb.ClusterRollout) error
+
+	GetClusterBootstrap(cluster string) (*pb.ClusterBootstrap, error)
+	PutClusterBootstrap(r *pb.ClusterBootstrap) error
+	ListClusterBootstraps() ([]*pb.ClusterBootstrap, error)
 
 	GetRolloutJob(cluster, pool string) (*pb.Rollout, error)
 	ListRolloutJobs(cluster string) ([]*pb.Rollout, error)
@@ -155,7 +161,7 @@ func Open(path string) (*BoltStore, error) {
 				return err
 			}
 		}
-		for _, sub := range [][]byte{sClusters, sMachines, sJobs} {
+		for _, sub := range [][]byte{sClusters, sMachines, sJobs, sBootstrap} {
 			if _, err := rol.CreateBucketIfNotExists(sub); err != nil {
 				return err
 			}
@@ -282,6 +288,8 @@ func marshalWithRev(msg proto.Message, rev Revision) ([]byte, error) {
 	case *pb.MachineRollout:
 		m.Revision = uint64(rev)
 	case *pb.ClusterRollout:
+		m.Revision = uint64(rev)
+	case *pb.ClusterBootstrap:
 		m.Revision = uint64(rev)
 	case *pb.Rollout:
 		m.Revision = uint64(rev)
@@ -595,6 +603,41 @@ func (s *BoltStore) PutClusterRollout(r *pb.ClusterRollout) error {
 		return errors.New("store: cluster rollout cluster required")
 	}
 	return s.putLWW(sClusters, []byte(r.Cluster), r, KindClusterRollout, r.Cluster)
+}
+
+func (s *BoltStore) GetClusterBootstrap(cluster string) (*pb.ClusterBootstrap, error) {
+	var r *pb.ClusterBootstrap
+	err := s.db.View(func(tx *bolt.Tx) error {
+		raw := tx.Bucket(bRollouts).Bucket(sBootstrap).Get([]byte(cluster))
+		if raw == nil {
+			return nil
+		}
+		r = &pb.ClusterBootstrap{}
+		return proto.Unmarshal(raw, r)
+	})
+	return r, err
+}
+
+func (s *BoltStore) PutClusterBootstrap(r *pb.ClusterBootstrap) error {
+	if r.GetCluster() == "" {
+		return errors.New("store: cluster bootstrap cluster required")
+	}
+	return s.putLWW(sBootstrap, []byte(r.Cluster), r, KindClusterBootstrap, r.Cluster)
+}
+
+func (s *BoltStore) ListClusterBootstraps() ([]*pb.ClusterBootstrap, error) {
+	var out []*pb.ClusterBootstrap
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bRollouts).Bucket(sBootstrap).ForEach(func(_, v []byte) error {
+			r := &pb.ClusterBootstrap{}
+			if err := proto.Unmarshal(v, r); err != nil {
+				return err
+			}
+			out = append(out, r)
+			return nil
+		})
+	})
+	return out, err
 }
 
 // --- Rollout jobs (LWW; one active job per cluster/pool) ---

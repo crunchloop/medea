@@ -175,6 +175,37 @@ message ClusterRollout {
   uint64 revision = 5;
 }
 
+// ClusterBootstrap tracks Medea-driven creation of a NEW single-control-plane
+// cluster (design/cluster-bootstrap.md). Reconciler-owned (LWW), one per cluster;
+// persisted so bootstrap resumes across the CP node's install-reboot.
+enum ClusterBootstrapPhase {
+  CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED = 0;
+  CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED = 1;   // record created; nothing done yet
+  CLUSTER_BOOTSTRAP_PHASE_GENERATING_SECRETS = 2; // mint PKI -> CredentialStore
+  CLUSTER_BOOTSTRAP_PHASE_STAGING = 3;            // render CP config + stage to Matchbox
+  CLUSTER_BOOTSTRAP_PHASE_AWAITING_INSTALL = 4;   // node PXE-boots + installs + reboots (park-and-retry)
+  CLUSTER_BOOTSTRAP_PHASE_BOOTSTRAPPING = 5;      // talos.Bootstrap once
+  CLUSTER_BOOTSTRAP_PHASE_AWAITING_HEALTHY = 6;   // etcd + apiserver up
+  CLUSTER_BOOTSTRAP_PHASE_FETCHING_KUBECONFIG = 7;// talos.Kubeconfig -> CredentialStore
+  CLUSTER_BOOTSTRAP_PHASE_READY = 8;              // seeded inventory; cluster live
+  CLUSTER_BOOTSTRAP_PHASE_FAILED = 9;             // errored / timed out (halt)
+}
+
+message ClusterBootstrap {
+  string cluster = 1;
+  ClusterBootstrapPhase phase = 2;
+  string cp_mac = 3;                // the control-plane Host MAC
+  string cp_endpoint = 4;           // https://<cp-ip>:6443 (pinned before boot)
+  string cp_ip = 5;                 // the pinned CP IP (DHCP reservation)
+  string talos_version = 6;
+  string kubernetes_version = 7;
+  string install_disk = 8;
+  repeated string extensions = 9;   // schematic extension set (empty = stock)
+  string message = 10;
+  string started_at = 11;           // RFC3339, stamped when bootstrap begins (for the timeout)
+  uint64 revision = 12;
+}
+
 enum ClusterRolloutPhase {
   CLUSTER_ROLLOUT_PHASE_UNSPECIFIED = 0;
   CLUSTER_ROLLOUT_PHASE_IDLE = 1;

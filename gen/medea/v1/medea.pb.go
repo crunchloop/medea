@@ -312,6 +312,79 @@ func (RolloutState) EnumDescriptor() ([]byte, []int) {
 	return file_medea_v1_medea_proto_rawDescGZIP(), []int{4}
 }
 
+// ClusterBootstrap tracks Medea-driven creation of a NEW single-control-plane
+// cluster (design/cluster-bootstrap.md). Reconciler-owned (LWW), one per cluster;
+// persisted so bootstrap resumes across the CP node's install-reboot.
+type ClusterBootstrapPhase int32
+
+const (
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED         ClusterBootstrapPhase = 0
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED    ClusterBootstrapPhase = 1 // record created; nothing done yet
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_GENERATING_SECRETS  ClusterBootstrapPhase = 2 // mint PKI -> CredentialStore
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_STAGING             ClusterBootstrapPhase = 3 // render CP config + stage to Matchbox
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_AWAITING_INSTALL    ClusterBootstrapPhase = 4 // node PXE-boots + installs + reboots (park-and-retry)
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_BOOTSTRAPPING       ClusterBootstrapPhase = 5 // talos.Bootstrap once
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_AWAITING_HEALTHY    ClusterBootstrapPhase = 6 // etcd + apiserver up
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_FETCHING_KUBECONFIG ClusterBootstrapPhase = 7 // talos.Kubeconfig -> CredentialStore
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_READY               ClusterBootstrapPhase = 8 // seeded inventory; cluster live
+	ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_FAILED              ClusterBootstrapPhase = 9 // errored / timed out (halt)
+)
+
+// Enum value maps for ClusterBootstrapPhase.
+var (
+	ClusterBootstrapPhase_name = map[int32]string{
+		0: "CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED",
+		1: "CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED",
+		2: "CLUSTER_BOOTSTRAP_PHASE_GENERATING_SECRETS",
+		3: "CLUSTER_BOOTSTRAP_PHASE_STAGING",
+		4: "CLUSTER_BOOTSTRAP_PHASE_AWAITING_INSTALL",
+		5: "CLUSTER_BOOTSTRAP_PHASE_BOOTSTRAPPING",
+		6: "CLUSTER_BOOTSTRAP_PHASE_AWAITING_HEALTHY",
+		7: "CLUSTER_BOOTSTRAP_PHASE_FETCHING_KUBECONFIG",
+		8: "CLUSTER_BOOTSTRAP_PHASE_READY",
+		9: "CLUSTER_BOOTSTRAP_PHASE_FAILED",
+	}
+	ClusterBootstrapPhase_value = map[string]int32{
+		"CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED":         0,
+		"CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED":    1,
+		"CLUSTER_BOOTSTRAP_PHASE_GENERATING_SECRETS":  2,
+		"CLUSTER_BOOTSTRAP_PHASE_STAGING":             3,
+		"CLUSTER_BOOTSTRAP_PHASE_AWAITING_INSTALL":    4,
+		"CLUSTER_BOOTSTRAP_PHASE_BOOTSTRAPPING":       5,
+		"CLUSTER_BOOTSTRAP_PHASE_AWAITING_HEALTHY":    6,
+		"CLUSTER_BOOTSTRAP_PHASE_FETCHING_KUBECONFIG": 7,
+		"CLUSTER_BOOTSTRAP_PHASE_READY":               8,
+		"CLUSTER_BOOTSTRAP_PHASE_FAILED":              9,
+	}
+)
+
+func (x ClusterBootstrapPhase) Enum() *ClusterBootstrapPhase {
+	p := new(ClusterBootstrapPhase)
+	*p = x
+	return p
+}
+
+func (x ClusterBootstrapPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ClusterBootstrapPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_medea_v1_medea_proto_enumTypes[5].Descriptor()
+}
+
+func (ClusterBootstrapPhase) Type() protoreflect.EnumType {
+	return &file_medea_v1_medea_proto_enumTypes[5]
+}
+
+func (x ClusterBootstrapPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ClusterBootstrapPhase.Descriptor instead.
+func (ClusterBootstrapPhase) EnumDescriptor() ([]byte, []int) {
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{5}
+}
+
 type ClusterRolloutPhase int32
 
 const (
@@ -348,11 +421,11 @@ func (x ClusterRolloutPhase) String() string {
 }
 
 func (ClusterRolloutPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_medea_v1_medea_proto_enumTypes[5].Descriptor()
+	return file_medea_v1_medea_proto_enumTypes[6].Descriptor()
 }
 
 func (ClusterRolloutPhase) Type() protoreflect.EnumType {
-	return &file_medea_v1_medea_proto_enumTypes[5]
+	return &file_medea_v1_medea_proto_enumTypes[6]
 }
 
 func (x ClusterRolloutPhase) Number() protoreflect.EnumNumber {
@@ -361,7 +434,7 @@ func (x ClusterRolloutPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ClusterRolloutPhase.Descriptor instead.
 func (ClusterRolloutPhase) EnumDescriptor() ([]byte, []int) {
-	return file_medea_v1_medea_proto_rawDescGZIP(), []int{5}
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{6}
 }
 
 // ---------------------------------------------------------------------------
@@ -402,11 +475,11 @@ func (x RolloutKind) String() string {
 }
 
 func (RolloutKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_medea_v1_medea_proto_enumTypes[6].Descriptor()
+	return file_medea_v1_medea_proto_enumTypes[7].Descriptor()
 }
 
 func (RolloutKind) Type() protoreflect.EnumType {
-	return &file_medea_v1_medea_proto_enumTypes[6]
+	return &file_medea_v1_medea_proto_enumTypes[7]
 }
 
 func (x RolloutKind) Number() protoreflect.EnumNumber {
@@ -415,7 +488,7 @@ func (x RolloutKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RolloutKind.Descriptor instead.
 func (RolloutKind) EnumDescriptor() ([]byte, []int) {
-	return file_medea_v1_medea_proto_rawDescGZIP(), []int{6}
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{7}
 }
 
 type RolloutJobState int32
@@ -463,11 +536,11 @@ func (x RolloutJobState) String() string {
 }
 
 func (RolloutJobState) Descriptor() protoreflect.EnumDescriptor {
-	return file_medea_v1_medea_proto_enumTypes[7].Descriptor()
+	return file_medea_v1_medea_proto_enumTypes[8].Descriptor()
 }
 
 func (RolloutJobState) Type() protoreflect.EnumType {
-	return &file_medea_v1_medea_proto_enumTypes[7]
+	return &file_medea_v1_medea_proto_enumTypes[8]
 }
 
 func (x RolloutJobState) Number() protoreflect.EnumNumber {
@@ -476,7 +549,7 @@ func (x RolloutJobState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RolloutJobState.Descriptor instead.
 func (RolloutJobState) EnumDescriptor() ([]byte, []int) {
-	return file_medea_v1_medea_proto_rawDescGZIP(), []int{7}
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{8}
 }
 
 // ---------------------------------------------------------------------------
@@ -1423,6 +1496,138 @@ func (x *ClusterRollout) GetRevision() uint64 {
 	return 0
 }
 
+type ClusterBootstrap struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Cluster           string                 `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Phase             ClusterBootstrapPhase  `protobuf:"varint,2,opt,name=phase,proto3,enum=medea.v1.ClusterBootstrapPhase" json:"phase,omitempty"`
+	CpMac             string                 `protobuf:"bytes,3,opt,name=cp_mac,json=cpMac,proto3" json:"cp_mac,omitempty"`                // the control-plane Host MAC
+	CpEndpoint        string                 `protobuf:"bytes,4,opt,name=cp_endpoint,json=cpEndpoint,proto3" json:"cp_endpoint,omitempty"` // https://<cp-ip>:6443 (pinned before boot)
+	CpIp              string                 `protobuf:"bytes,5,opt,name=cp_ip,json=cpIp,proto3" json:"cp_ip,omitempty"`                   // the pinned CP IP (DHCP reservation)
+	TalosVersion      string                 `protobuf:"bytes,6,opt,name=talos_version,json=talosVersion,proto3" json:"talos_version,omitempty"`
+	KubernetesVersion string                 `protobuf:"bytes,7,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
+	InstallDisk       string                 `protobuf:"bytes,8,opt,name=install_disk,json=installDisk,proto3" json:"install_disk,omitempty"`
+	Extensions        []string               `protobuf:"bytes,9,rep,name=extensions,proto3" json:"extensions,omitempty"` // schematic extension set (empty = stock)
+	Message           string                 `protobuf:"bytes,10,opt,name=message,proto3" json:"message,omitempty"`
+	StartedAt         string                 `protobuf:"bytes,11,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"` // RFC3339, stamped when bootstrap begins (for the timeout)
+	Revision          uint64                 `protobuf:"varint,12,opt,name=revision,proto3" json:"revision,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ClusterBootstrap) Reset() {
+	*x = ClusterBootstrap{}
+	mi := &file_medea_v1_medea_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterBootstrap) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterBootstrap) ProtoMessage() {}
+
+func (x *ClusterBootstrap) ProtoReflect() protoreflect.Message {
+	mi := &file_medea_v1_medea_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterBootstrap.ProtoReflect.Descriptor instead.
+func (*ClusterBootstrap) Descriptor() ([]byte, []int) {
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ClusterBootstrap) GetCluster() string {
+	if x != nil {
+		return x.Cluster
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetPhase() ClusterBootstrapPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return ClusterBootstrapPhase_CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED
+}
+
+func (x *ClusterBootstrap) GetCpMac() string {
+	if x != nil {
+		return x.CpMac
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetCpEndpoint() string {
+	if x != nil {
+		return x.CpEndpoint
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetCpIp() string {
+	if x != nil {
+		return x.CpIp
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetTalosVersion() string {
+	if x != nil {
+		return x.TalosVersion
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetKubernetesVersion() string {
+	if x != nil {
+		return x.KubernetesVersion
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetInstallDisk() string {
+	if x != nil {
+		return x.InstallDisk
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetExtensions() []string {
+	if x != nil {
+		return x.Extensions
+	}
+	return nil
+}
+
+func (x *ClusterBootstrap) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
+func (x *ClusterBootstrap) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type Rollout struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Cluster        string                 `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
@@ -1441,7 +1646,7 @@ type Rollout struct {
 
 func (x *Rollout) Reset() {
 	*x = Rollout{}
-	mi := &file_medea_v1_medea_proto_msgTypes[12]
+	mi := &file_medea_v1_medea_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1658,7 @@ func (x *Rollout) String() string {
 func (*Rollout) ProtoMessage() {}
 
 func (x *Rollout) ProtoReflect() protoreflect.Message {
-	mi := &file_medea_v1_medea_proto_msgTypes[12]
+	mi := &file_medea_v1_medea_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1671,7 @@ func (x *Rollout) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Rollout.ProtoReflect.Descriptor instead.
 func (*Rollout) Descriptor() ([]byte, []int) {
-	return file_medea_v1_medea_proto_rawDescGZIP(), []int{12}
+	return file_medea_v1_medea_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Rollout) GetCluster() string {
@@ -1626,7 +1831,25 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.medea.v1.ClusterRolloutPhaseR\x05phase\x12:\n" +
 	"\x19target_kubernetes_version\x18\x03 \x01(\tR\x17targetKubernetesVersion\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x04R\brevision\"\xd7\x02\n" +
+	"\brevision\x18\x05 \x01(\x04R\brevision\"\x9c\x03\n" +
+	"\x10ClusterBootstrap\x12\x18\n" +
+	"\acluster\x18\x01 \x01(\tR\acluster\x125\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x1f.medea.v1.ClusterBootstrapPhaseR\x05phase\x12\x15\n" +
+	"\x06cp_mac\x18\x03 \x01(\tR\x05cpMac\x12\x1f\n" +
+	"\vcp_endpoint\x18\x04 \x01(\tR\n" +
+	"cpEndpoint\x12\x13\n" +
+	"\x05cp_ip\x18\x05 \x01(\tR\x04cpIp\x12#\n" +
+	"\rtalos_version\x18\x06 \x01(\tR\ftalosVersion\x12-\n" +
+	"\x12kubernetes_version\x18\a \x01(\tR\x11kubernetesVersion\x12!\n" +
+	"\finstall_disk\x18\b \x01(\tR\vinstallDisk\x12\x1e\n" +
+	"\n" +
+	"extensions\x18\t \x03(\tR\n" +
+	"extensions\x12\x18\n" +
+	"\amessage\x18\n" +
+	" \x01(\tR\amessage\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\v \x01(\tR\tstartedAt\x12\x1a\n" +
+	"\brevision\x18\f \x01(\x04R\brevision\"\xd7\x02\n" +
 	"\aRollout\x12\x18\n" +
 	"\acluster\x18\x01 \x01(\tR\acluster\x12\x12\n" +
 	"\x04pool\x18\x02 \x01(\tR\x04pool\x12)\n" +
@@ -1673,7 +1896,18 @@ const file_medea_v1_medea_proto_rawDesc = "" +
 	"\x17ROLLOUT_STATE_UPGRADING\x10\x03\x12!\n" +
 	"\x1dROLLOUT_STATE_WAITING_HEALTHY\x10\x04\x12\x16\n" +
 	"\x12ROLLOUT_STATE_DONE\x10\x05\x12\x18\n" +
-	"\x14ROLLOUT_STATE_FAILED\x10\x06*\xa3\x01\n" +
+	"\x14ROLLOUT_STATE_FAILED\x10\x06*\xc2\x03\n" +
+	"\x15ClusterBootstrapPhase\x12'\n" +
+	"#CLUSTER_BOOTSTRAP_PHASE_UNSPECIFIED\x10\x00\x12,\n" +
+	"(CLUSTER_BOOTSTRAP_PHASE_NOT_BOOTSTRAPPED\x10\x01\x12.\n" +
+	"*CLUSTER_BOOTSTRAP_PHASE_GENERATING_SECRETS\x10\x02\x12#\n" +
+	"\x1fCLUSTER_BOOTSTRAP_PHASE_STAGING\x10\x03\x12,\n" +
+	"(CLUSTER_BOOTSTRAP_PHASE_AWAITING_INSTALL\x10\x04\x12)\n" +
+	"%CLUSTER_BOOTSTRAP_PHASE_BOOTSTRAPPING\x10\x05\x12,\n" +
+	"(CLUSTER_BOOTSTRAP_PHASE_AWAITING_HEALTHY\x10\x06\x12/\n" +
+	"+CLUSTER_BOOTSTRAP_PHASE_FETCHING_KUBECONFIG\x10\a\x12!\n" +
+	"\x1dCLUSTER_BOOTSTRAP_PHASE_READY\x10\b\x12\"\n" +
+	"\x1eCLUSTER_BOOTSTRAP_PHASE_FAILED\x10\t*\xa3\x01\n" +
 	"\x13ClusterRolloutPhase\x12%\n" +
 	"!CLUSTER_ROLLOUT_PHASE_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aCLUSTER_ROLLOUT_PHASE_IDLE\x10\x01\x12#\n" +
@@ -1704,59 +1938,62 @@ func file_medea_v1_medea_proto_rawDescGZIP() []byte {
 	return file_medea_v1_medea_proto_rawDescData
 }
 
-var file_medea_v1_medea_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_medea_v1_medea_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_medea_v1_medea_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_medea_v1_medea_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_medea_v1_medea_proto_goTypes = []any{
 	(Role)(0),                   // 0: medea.v1.Role
 	(ClusterMode)(0),            // 1: medea.v1.ClusterMode
 	(HostState)(0),              // 2: medea.v1.HostState
 	(MachinePhase)(0),           // 3: medea.v1.MachinePhase
 	(RolloutState)(0),           // 4: medea.v1.RolloutState
-	(ClusterRolloutPhase)(0),    // 5: medea.v1.ClusterRolloutPhase
-	(RolloutKind)(0),            // 6: medea.v1.RolloutKind
-	(RolloutJobState)(0),        // 7: medea.v1.RolloutJobState
-	(*Cluster)(nil),             // 8: medea.v1.Cluster
-	(*ClusterDesired)(nil),      // 9: medea.v1.ClusterDesired
-	(*ClusterObserved)(nil),     // 10: medea.v1.ClusterObserved
-	(*ClusterEndpoints)(nil),    // 11: medea.v1.ClusterEndpoints
-	(*NodePool)(nil),            // 12: medea.v1.NodePool
-	(*NodePoolDesired)(nil),     // 13: medea.v1.NodePoolDesired
-	(*Host)(nil),                // 14: medea.v1.Host
-	(*RolloutStrategy)(nil),     // 15: medea.v1.RolloutStrategy
-	(*Machine)(nil),             // 16: medea.v1.Machine
-	(*MachineObserved)(nil),     // 17: medea.v1.MachineObserved
-	(*MachineRollout)(nil),      // 18: medea.v1.MachineRollout
-	(*ClusterRollout)(nil),      // 19: medea.v1.ClusterRollout
-	(*Rollout)(nil),             // 20: medea.v1.Rollout
-	nil,                         // 21: medea.v1.NodePool.SelectorEntry
-	nil,                         // 22: medea.v1.Host.LabelsEntry
-	(*durationpb.Duration)(nil), // 23: google.protobuf.Duration
+	(ClusterBootstrapPhase)(0),  // 5: medea.v1.ClusterBootstrapPhase
+	(ClusterRolloutPhase)(0),    // 6: medea.v1.ClusterRolloutPhase
+	(RolloutKind)(0),            // 7: medea.v1.RolloutKind
+	(RolloutJobState)(0),        // 8: medea.v1.RolloutJobState
+	(*Cluster)(nil),             // 9: medea.v1.Cluster
+	(*ClusterDesired)(nil),      // 10: medea.v1.ClusterDesired
+	(*ClusterObserved)(nil),     // 11: medea.v1.ClusterObserved
+	(*ClusterEndpoints)(nil),    // 12: medea.v1.ClusterEndpoints
+	(*NodePool)(nil),            // 13: medea.v1.NodePool
+	(*NodePoolDesired)(nil),     // 14: medea.v1.NodePoolDesired
+	(*Host)(nil),                // 15: medea.v1.Host
+	(*RolloutStrategy)(nil),     // 16: medea.v1.RolloutStrategy
+	(*Machine)(nil),             // 17: medea.v1.Machine
+	(*MachineObserved)(nil),     // 18: medea.v1.MachineObserved
+	(*MachineRollout)(nil),      // 19: medea.v1.MachineRollout
+	(*ClusterRollout)(nil),      // 20: medea.v1.ClusterRollout
+	(*ClusterBootstrap)(nil),    // 21: medea.v1.ClusterBootstrap
+	(*Rollout)(nil),             // 22: medea.v1.Rollout
+	nil,                         // 23: medea.v1.NodePool.SelectorEntry
+	nil,                         // 24: medea.v1.Host.LabelsEntry
+	(*durationpb.Duration)(nil), // 25: google.protobuf.Duration
 }
 var file_medea_v1_medea_proto_depIdxs = []int32{
-	9,  // 0: medea.v1.Cluster.desired:type_name -> medea.v1.ClusterDesired
-	10, // 1: medea.v1.Cluster.observed:type_name -> medea.v1.ClusterObserved
-	11, // 2: medea.v1.Cluster.endpoints:type_name -> medea.v1.ClusterEndpoints
+	10, // 0: medea.v1.Cluster.desired:type_name -> medea.v1.ClusterDesired
+	11, // 1: medea.v1.Cluster.observed:type_name -> medea.v1.ClusterObserved
+	12, // 2: medea.v1.Cluster.endpoints:type_name -> medea.v1.ClusterEndpoints
 	1,  // 3: medea.v1.Cluster.mode:type_name -> medea.v1.ClusterMode
 	0,  // 4: medea.v1.NodePool.role:type_name -> medea.v1.Role
-	13, // 5: medea.v1.NodePool.desired:type_name -> medea.v1.NodePoolDesired
-	15, // 6: medea.v1.NodePool.strategy:type_name -> medea.v1.RolloutStrategy
-	21, // 7: medea.v1.NodePool.selector:type_name -> medea.v1.NodePool.SelectorEntry
-	22, // 8: medea.v1.Host.labels:type_name -> medea.v1.Host.LabelsEntry
+	14, // 5: medea.v1.NodePool.desired:type_name -> medea.v1.NodePoolDesired
+	16, // 6: medea.v1.NodePool.strategy:type_name -> medea.v1.RolloutStrategy
+	23, // 7: medea.v1.NodePool.selector:type_name -> medea.v1.NodePool.SelectorEntry
+	24, // 8: medea.v1.Host.labels:type_name -> medea.v1.Host.LabelsEntry
 	0,  // 9: medea.v1.Host.role:type_name -> medea.v1.Role
 	2,  // 10: medea.v1.Host.state:type_name -> medea.v1.HostState
-	23, // 11: medea.v1.RolloutStrategy.drain_timeout:type_name -> google.protobuf.Duration
+	25, // 11: medea.v1.RolloutStrategy.drain_timeout:type_name -> google.protobuf.Duration
 	0,  // 12: medea.v1.Machine.role:type_name -> medea.v1.Role
-	17, // 13: medea.v1.Machine.observed:type_name -> medea.v1.MachineObserved
+	18, // 13: medea.v1.Machine.observed:type_name -> medea.v1.MachineObserved
 	3,  // 14: medea.v1.MachineObserved.phase:type_name -> medea.v1.MachinePhase
 	4,  // 15: medea.v1.MachineRollout.state:type_name -> medea.v1.RolloutState
-	5,  // 16: medea.v1.ClusterRollout.phase:type_name -> medea.v1.ClusterRolloutPhase
-	6,  // 17: medea.v1.Rollout.kind:type_name -> medea.v1.RolloutKind
-	7,  // 18: medea.v1.Rollout.state:type_name -> medea.v1.RolloutJobState
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	6,  // 16: medea.v1.ClusterRollout.phase:type_name -> medea.v1.ClusterRolloutPhase
+	5,  // 17: medea.v1.ClusterBootstrap.phase:type_name -> medea.v1.ClusterBootstrapPhase
+	7,  // 18: medea.v1.Rollout.kind:type_name -> medea.v1.RolloutKind
+	8,  // 19: medea.v1.Rollout.state:type_name -> medea.v1.RolloutJobState
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_medea_v1_medea_proto_init() }
@@ -1769,8 +2006,8 @@ func file_medea_v1_medea_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_medea_v1_medea_proto_rawDesc), len(file_medea_v1_medea_proto_rawDesc)),
-			NumEnums:      8,
-			NumMessages:   15,
+			NumEnums:      9,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

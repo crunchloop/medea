@@ -149,6 +149,25 @@ func RenderControlPlaneConfig(in ControlPlaneConfigInput) ([]byte, error) {
 	return applyPatches(out, in.Patches)
 }
 
+// Talosconfig produces the admin talosconfig (Talos API client creds) for a
+// cluster from its secrets bundle — what Medea needs to reach the CP node's
+// Talos API to bootstrap etcd. Generated from the same bundle as the machine
+// config, so the two agree.
+func Talosconfig(clusterName, controlPlaneEndpoint, kubernetesVersion string, bundle *secrets.Bundle) ([]byte, error) {
+	if bundle == nil {
+		return nil, fmt.Errorf("provision: secrets bundle required")
+	}
+	input, err := generate.NewInput(clusterName, controlPlaneEndpoint, kubernetesVersion, generate.WithSecretsBundle(bundle))
+	if err != nil {
+		return nil, fmt.Errorf("provision: build config input: %w", err)
+	}
+	tc, err := input.Talosconfig()
+	if err != nil {
+		return nil, fmt.Errorf("provision: generate talosconfig: %w", err)
+	}
+	return tc.Bytes()
+}
+
 // applyPatches layers gen-config patches (strategic-merge or JSON6902) onto an
 // encoded machine config — the talos/patches/* the homelab bakes in at gen time.
 func applyPatches(configBytes []byte, patches [][]byte) ([]byte, error) {
