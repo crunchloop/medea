@@ -1,7 +1,7 @@
 //go:build integration
 
-// Package itest is the integration-test harness: it spins up a throwaway Talos
-// cluster (docker provisioner) so the talos/kube wrappers and the rollout
+// Package integration is the integration-test harness: it spins up a throwaway
+// Talos cluster (docker provisioner) so the talos/kube wrappers and the rollout
 // mechanics can be exercised against a real API (PRD §9.2, talos-client.md §9).
 //
 // Build-tagged `integration` so it never runs in the fast unit loop; run with
@@ -11,7 +11,7 @@
 // scratch cluster — it is NOT the control plane's runtime behavior. Medea's
 // production code never shells out (PRD §13 #15); it imports the Talos Go
 // packages. The two are deliberately separate concerns.
-package itest
+package integration
 
 import (
 	"bytes"

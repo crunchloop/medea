@@ -1,6 +1,6 @@
 //go:build integration
 
-package itest
+package integration
 
 import (
 	"context"

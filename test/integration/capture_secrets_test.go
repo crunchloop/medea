@@ -1,6 +1,6 @@
 //go:build integration
 
-package itest
+package integration
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	"github.com/crunchloop/medea/internal/talos"
 )
 
-// TestCaptureSecrets validates the provisioning secrets-capture path
+// testCaptureSecrets validates the provisioning secrets-capture path
 // (provisioning-plane.md §5): secrets.NewBundleFromConfig over a live
 // control-plane machine config must yield a usable secrets.yaml (the bundle a
-// joining node's config is minted from). Reuses the docker scratch cluster.
-func TestCaptureSecrets(t *testing.T) {
-	c := Start(t)
+// joining node's config is minted from). Read-only, so it runs as a
+// shared-cluster subtest of TestClusterSuite.
+func testCaptureSecrets(t *testing.T, c *Cluster) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
