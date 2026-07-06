@@ -71,7 +71,7 @@ set +e
 MEDEA_QEMU_TALOSCONFIG="$DIR/talosconfig" \
 MEDEA_QEMU_KUBECONFIG="$DIR/kubeconfig" \
 MEDEA_QEMU_TARGET="$TARGET" \
-  go test -tags integration -run TestQemuUpgrade -timeout 75m -v ./internal/itest/
+  go test -tags integration -run TestQemuUpgrade -timeout 75m -v ./test/e2e/
 rc=$?
 set -e
 

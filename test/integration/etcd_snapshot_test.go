@@ -1,6 +1,6 @@
 //go:build integration
 
-package itest
+package integration
 
 import (
 	"bytes"
@@ -12,13 +12,12 @@ import (
 	"github.com/crunchloop/medea/internal/talos"
 )
 
-// TestEtcdSnapshot validates the (non-destructive) etcd snapshot against a real
+// testEtcdSnapshot validates the (non-destructive) etcd snapshot against a real
 // control-plane node. UpgradeOS and Drain are destructive even to the scratch
 // cluster and are exercised by the rollout reconciler's integration test, where
-// ordering is controlled.
-func TestEtcdSnapshot(t *testing.T) {
-	c := Start(t)
-
+// ordering is controlled. Read-only, so it runs as a shared-cluster subtest of
+// TestClusterSuite.
+func testEtcdSnapshot(t *testing.T, c *Cluster) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

@@ -1,6 +1,6 @@
 //go:build integration
 
-package itest
+package integration
 
 import (
 	"context"
@@ -12,12 +12,11 @@ import (
 	"github.com/crunchloop/medea/internal/talos"
 )
 
-// TestWrappersAgainstRealCluster is the first integration test: it validates the
-// talos/kube wrappers (which have no unit coverage — they wrap real clients)
-// against a live scratch cluster, mirroring the seed read-path.
-func TestWrappersAgainstRealCluster(t *testing.T) {
-	c := Start(t)
-
+// testWrappersAgainstRealCluster validates the talos/kube wrappers (which have no
+// unit coverage — they wrap real clients) against a live scratch cluster,
+// mirroring the seed read-path. Read-only, so it runs as a shared-cluster subtest
+// of TestClusterSuite.
+func testWrappersAgainstRealCluster(t *testing.T, c *Cluster) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
