@@ -90,6 +90,11 @@ func StartWith(t *testing.T, opts Options) *Cluster {
 		"--workers", "1",
 		"--talosconfig-destination", talosCfg,
 		"--state", stateDir,
+		// These tests never use cluster DNS. Disabling CoreDNS makes talosctl's
+		// post-create health wait SKIP the coredns gate — on a small CI runner
+		// (2 vCPU) CoreDNS never reports ready, so that gate would otherwise
+		// hang the create until timeout even though the cluster is fully usable.
+		"--config-patch", `{"cluster":{"coreDNS":{"disabled":true}}}`,
 	}
 	if opts.K8sVersion != "" {
 		args = append(args, "--kubernetes-version", opts.K8sVersion)
