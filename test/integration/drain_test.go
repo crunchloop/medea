@@ -87,9 +87,11 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		t.Fatalf("create deployment: %v", err)
 	}
 
-	// Wait for the pod to be Running on the worker; capture its name.
+	// Wait for the pod to be Running on the worker; capture its name. 5m (not 3m):
+	// on a cold, CPU-starved CI runner the worker still has to pull the pause
+	// image and wire the sandbox right after the cluster came up.
 	var podName string
-	if !waitFor(ctx, 3*time.Minute, func() bool {
+	if !waitFor(ctx, 5*time.Minute, func() bool {
 		pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"})
 		if err != nil {
 			return false
@@ -103,6 +105,7 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		}
 		return false
 	}) {
+		dumpWorkloadDiag(ctx, t, cs, worker)
 		t.Fatal("workload pod never reached Running on the worker")
 	}
 
@@ -118,6 +121,36 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		return apierrors.IsNotFound(err)
 	}) {
 		t.Fatalf("pod %s was not evicted", podName)
+	}
+}
+
+// dumpWorkloadDiag logs why the drain-test pod hasn't started — its phase, node,
+// conditions, and container waiting reasons, plus recent namespace events — so a
+// CI failure ("never reached Running") is diagnosable instead of opaque.
+func dumpWorkloadDiag(ctx context.Context, t *testing.T, cs *kubernetes.Clientset, worker string) {
+	t.Helper()
+	t.Logf("diag: worker node = %s", worker)
+	if pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"}); err != nil {
+		t.Logf("diag: list pods: %v", err)
+	} else {
+		for i := range pods.Items {
+			p := &pods.Items[i]
+			t.Logf("diag: pod %s node=%q phase=%s", p.Name, p.Spec.NodeName, p.Status.Phase)
+			for _, c := range p.Status.Conditions {
+				t.Logf("  cond %s=%s %s %s", c.Type, c.Status, c.Reason, c.Message)
+			}
+			for _, cst := range p.Status.ContainerStatuses {
+				if w := cst.State.Waiting; w != nil {
+					t.Logf("  container %s waiting: %s %s", cst.Name, w.Reason, w.Message)
+				}
+			}
+		}
+	}
+	if ev, err := cs.CoreV1().Events("default").List(ctx, metav1.ListOptions{}); err == nil {
+		for i := range ev.Items {
+			e := &ev.Items[i]
+			t.Logf("diag: event %s/%s: %s", e.Type, e.Reason, e.Message)
+		}
 	}
 }
 
