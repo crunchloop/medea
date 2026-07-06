@@ -25,7 +25,10 @@ import (
 func TestDrainEvictsWorkload(t *testing.T) {
 	c := Start(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Budget for the whole flow: schedule + image-pull + Running, then drain, then
+	// eviction. 15m (was 5m) so the per-step waits below actually get their time
+	// on a slow CI runner — a 5m ceiling here silently capped them.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	restCfg, err := clientcmd.RESTConfigFromKubeConfig(c.Kubeconfig)
@@ -87,11 +90,11 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		t.Fatalf("create deployment: %v", err)
 	}
 
-	// Wait for the pod to be Running on the worker; capture its name. 5m (not 3m):
-	// on a cold, CPU-starved CI runner the worker still has to pull the pause
-	// image and wire the sandbox right after the cluster came up.
+	// Wait for the pod to be Running on the worker; capture its name. 8m: on a
+	// cold, CPU-starved CI runner the worker still has to pull the pause image and
+	// wire the sandbox right after the cluster came up.
 	var podName string
-	if !waitFor(ctx, 5*time.Minute, func() bool {
+	if !waitFor(ctx, 8*time.Minute, func() bool {
 		pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"})
 		if err != nil {
 			return false
@@ -105,7 +108,7 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		}
 		return false
 	}) {
-		dumpWorkloadDiag(ctx, t, cs, worker)
+		dumpWorkloadDiag(t, cs, worker)
 		t.Fatal("workload pod never reached Running on the worker")
 	}
 
@@ -127,8 +130,12 @@ func TestDrainEvictsWorkload(t *testing.T) {
 // dumpWorkloadDiag logs why the drain-test pod hasn't started — its phase, node,
 // conditions, and container waiting reasons, plus recent namespace events — so a
 // CI failure ("never reached Running") is diagnosable instead of opaque.
-func dumpWorkloadDiag(ctx context.Context, t *testing.T, cs *kubernetes.Clientset, worker string) {
+func dumpWorkloadDiag(t *testing.T, cs *kubernetes.Clientset, worker string) {
 	t.Helper()
+	// Fresh context: the caller's ctx is typically already expired (that's why we
+	// timed out), which is exactly when this diagnostic must still work.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	t.Logf("diag: worker node = %s", worker)
 	if pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"}); err != nil {
 		t.Logf("diag: list pods: %v", err)
