@@ -1,9 +1,15 @@
-# Integration tests against a real (docker-provisioned) Talos cluster. These boot
-# actual clusters — minutes, not milliseconds — so they run nightly and on-demand
-# rather than per-PR. The fast unit gate lives in ci.yml.
+# Integration tests against real (docker-provisioned) Talos clusters. These boot
+# actual clusters — minutes each — so they run nightly and on-demand, not per-PR.
+# The fast unit gate lives in ci.yml.
 #
-# QEMU tests (make test-qemu) are NOT run here: they need Apple-Silicon + vmnet
-# and belong on a self-hosted runner, triggered manually.
+# Each top-level test runs as its OWN job (matrix) so it boots at most ONE Talos
+# docker cluster: a single boot fits an ubuntu-latest runner, whereas the full
+# suite run serially does not. TestClusterSuite runs the three read-only checks
+# as parallel subtests against its one cluster; TestMatchboxServesStagedHost
+# boots no cluster (fast).
+#
+# QEMU end-to-end (test/e2e, make test-qemu) is a separate workflow (e2e.yml) on
+# a KVM runner.
 name: integration
 
 on:
@@ -29,10 +35,21 @@ concurrency:
 
 jobs:
   integration:
+    strategy:
+      # Report every test's result independently — one slow/flaky boot must not
+      # cancel the others.
+      fail-fast: false
+      matrix:
+        test:
+          - TestClusterSuite
+          - TestDrainEvictsWorkload
+          - TestK8sUpgrade
+          - TestMatchboxServesStagedHost
     runs-on: ubuntu-latest
-    # A generous ceiling: real cluster boots dominate. The suite itself targets
-    # far less, but leave headroom for image pulls on a cold runner.
-    timeout-minutes: 40
+    # One boot fits comfortably; the harness caps a create at 20m, so 35m leaves
+    # headroom for image pull + health + the test itself on a cold runner.
+    timeout-minutes: 35
+    name: ${{ matrix.test }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,5 +67,6 @@ jobs:
           chmod +x /usr/local/bin/talosctl
           talosctl version --client
 
-      - name: Integration tests
-        run: make test-integration
+      - name: Run ${{ matrix.test }}
+        # Anchor the -run regex to the exact top-level test name.
+        run: go test -tags integration -run "^${{ matrix.test }}$" -timeout 30m -v ./test/integration/

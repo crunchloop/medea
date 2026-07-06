@@ -62,7 +62,11 @@ func StartWith(t *testing.T, opts Options) *Cluster {
 	requireBin(t, "docker")
 
 	dir := t.TempDir()
-	name := "medea-it"
+	// Per-test cluster name: a create that gets KILLED (e.g. a slow runner hitting
+	// the timeout below) leaks its docker containers; a shared name would then
+	// wedge the NEXT test's create with "container name already in use". Distinct
+	// names keep failures isolated to the test that caused them.
+	name := clusterName(t)
 	talosCfg := filepath.Join(dir, "talosconfig")
 	kubeCfg := filepath.Join(dir, "kubeconfig")
 
@@ -77,6 +81,10 @@ func StartWith(t *testing.T, opts Options) *Cluster {
 	// gone); the docker provisioner is always 1 control plane and waits for the
 	// cluster to be healthy before returning (no --wait flag).
 	_ = runQuiet(10*time.Minute, "talosctl", "cluster", "destroy", "--name", name, "--state", stateDir)
+	// Belt-and-suspenders: talosctl's destroy is scoped to the (fresh) --state
+	// dir, so it can't see containers leaked by an earlier killed create. Sweep
+	// them by docker name before creating.
+	dockerCleanup(name)
 	args := []string{"cluster", "create", "docker",
 		"--name", name,
 		"--workers", "1",
@@ -89,9 +97,13 @@ func StartWith(t *testing.T, opts Options) *Cluster {
 	if opts.TalosImage != "" {
 		args = append(args, "--image", opts.TalosImage)
 	}
-	run(t, 12*time.Minute, "talosctl", args...)
+	// 20m (was 12m): a cold or loaded host pulls the Talos image, boots two
+	// nodes, bootstraps etcd, and waits for k8s health — slow runners were killed
+	// right at the old ceiling while etcd was still converging.
+	run(t, 20*time.Minute, "talosctl", args...)
 	t.Cleanup(func() {
 		_ = runQuiet(5*time.Minute, "talosctl", "cluster", "destroy", "--name", name, "--state", stateDir)
+		dockerCleanup(name)
 	})
 
 	tb, err := os.ReadFile(talosCfg)
@@ -133,6 +145,31 @@ func controlPlaneNodeIP(t *testing.T, clusterName string) string {
 		t.Fatal("control-plane container has no network IP")
 	}
 	return ip
+}
+
+// clusterName derives a docker-safe, per-test cluster name from the test name
+// (e.g. "medea-it-testdrainevictsworkload"), so leaked containers from one test
+// can't collide with another's create.
+func clusterName(t *testing.T) string {
+	s := strings.ToLower(t.Name())
+	s = strings.NewReplacer("/", "-", " ", "-", "_", "-").Replace(s)
+	return "medea-it-" + s
+}
+
+// dockerCleanup force-removes any leftover docker containers and network for a
+// talosctl docker cluster of the given name. `talosctl cluster destroy` is
+// state-scoped (it reads the --state dir), so a create that was killed mid-flight
+// leaves containers a fresh-state destroy can't see — which then wedges the next
+// create with "container name already in use". Best-effort: errors are ignored.
+func dockerCleanup(name string) {
+	// talosctl names nodes "<cluster>-controlplane-1", "<cluster>-worker-1", …;
+	// anchor on "^/<name>-" so we don't match an unrelated cluster by substring.
+	if out, err := exec.Command("docker", "ps", "-aq", "--filter", "name=^/"+name+"-").Output(); err == nil {
+		for _, id := range strings.Fields(string(out)) {
+			_ = exec.Command("docker", "rm", "-f", id).Run()
+		}
+	}
+	_ = exec.Command("docker", "network", "rm", name).Run()
 }
 
 func requireBin(t *testing.T, name string) {
