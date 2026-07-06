@@ -1,0 +1,73 @@
+# GoReleaser config for the medea CLI/server binary.
+# Build/verify locally without publishing:  goreleaser release --snapshot --clean
+# Validate schema:                           goreleaser check
+#
+# The binary is pure Go (CGO_ENABLED=0) — the 1Password SDK only needs CGO for
+# desktop-app integration, which medea never uses (service-account auth only).
+# That's what makes cross-platform release builds from one runner possible.
+version: 2
+
+project_name: medea
+
+builds:
+  - id: medea
+    main: ./cmd/medea
+    binary: medea
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: medea
+    formats:
+      - tar.gz
+    name_template: "medea_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  # A tag with a prerelease suffix (v1.2.3-rc.1) publishes as a GitHub prerelease
+  # and is NOT promoted to latest / Homebrew.
+  prerelease: auto
+
+homebrew_casks:
+  - name: medea
+    repository:
+      owner: crunchloop
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/crunchloop/medea"
+    description: "External control plane for operating Talos clusters (safe version rollouts)"
+    # Don't update the tap for prereleases.
+    skip_upload: auto
+    # The binary is unsigned; strip the macOS quarantine bit so it runs without a
+    # Gatekeeper prompt after `brew install`.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/medea"]
+          end

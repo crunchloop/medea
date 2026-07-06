@@ -1,0 +1,48 @@
+# Cut a release: on a version tag, GoReleaser builds the cross-platform CLI
+# binaries, publishes a GitHub release (prerelease for -rc/-beta tags), and
+# updates the Homebrew cask in crunchloop/homebrew-tap.
+#
+#   git tag v1.2.3 && git push origin v1.2.3      # stable
+#   git tag v1.2.3-rc.1 && git push origin ...     # prerelease (no latest/tap)
+#
+# Prerequisites (one-time):
+#   - repo crunchloop/homebrew-tap must exist.
+#   - secret HOMEBREW_TAP_GITHUB_TOKEN: a PAT with contents:write on that tap
+#     repo (GITHUB_TOKEN is scoped to THIS repo and can't push to the tap).
+#
+# Container images are still published by build.yml; folding them into GoReleaser
+# is a follow-up.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # GoReleaser needs full history + tags for the changelog and version.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

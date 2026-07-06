@@ -9,9 +9,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is stamped at build time by GoReleaser (-ldflags "-X main.version=...").
+// Defaults to "dev" for `go build`/`go install` from source.
+var version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:          "medea",
 	Short:        "Medea — external control plane for Talos clusters",
+	Version:      version,
 	SilenceUsage: true,
 }
 
