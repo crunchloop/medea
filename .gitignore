@@ -13,3 +13,6 @@ design/private/
 # `make test-qemu`) — throwaway, never commit
 /controlplane.yaml
 /worker.yaml
+
+# goreleaser build output
+/dist/
