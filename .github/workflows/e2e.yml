@@ -1,0 +1,68 @@
+# DISABLED for now — this workflow is commented out until a self-hosted Linux
+# runner with /dev/kvm (labels: self-hosted, linux, kvm) is registered. With no
+# such runner, its scheduled runs would only queue. To enable: uncomment the body
+# below (everything after this header) and register the runner. The portable
+# scripts/qemu-validate.sh already runs on any KVM host or a Linux dev box.
+#
+# ---------------------------------------------------------------------------
+# End-to-end QEMU rollout validation (the bare-metal A/B UpgradeOS path). Boots
+# real Talos VMs under QEMU and drives the reconciler through an OS upgrade +
+# reboot — see scripts/qemu-validate.sh.
+#
+# REQUIRES a self-hosted Linux runner with:
+#   - /dev/kvm (nested virt or bare metal) — GitHub-hosted runners lack this and
+#     cannot run this workflow (TCG software emulation is far too slow).
+#   - qemu-system + qemu-img, iptables on PATH.
+#   - passwordless sudo (or the runner runs as root) — the script escalates via
+#     $SUDO for the QEMU provisioner (bridge/iptables/KVM).
+# Register such a runner with the labels: self-hosted, linux, kvm.
+# name: e2e
+#
+# on:
+#   # On-demand: `gh workflow run e2e.yml`.
+#   workflow_dispatch: {}
+#   # Nightly — only runs if a self-hosted [kvm] runner is online to pick it up.
+#   schedule:
+#     - cron: "30 7 * * *"
+#
+# env:
+#   CGO_ENABLED: "1"
+#   TALOS_VERSION: "v1.13.5"
+#
+# permissions:
+#   contents: read
+#
+# concurrency:
+#   group: e2e-${{ github.ref }}
+#   cancel-in-progress: true
+#
+# jobs:
+#   qemu:
+#     runs-on: [self-hosted, linux, kvm]
+#     timeout-minutes: 120
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#
+#       - name: Set up Go
+#         uses: actions/setup-go@v5
+#         with:
+#           go-version-file: go.mod
+#           cache: true
+#
+#       - name: Preflight — KVM present
+#         run: test -e /dev/kvm || { echo "::error::/dev/kvm missing on this runner"; exit 1; }
+#
+#       - name: Install talosctl
+#         # Install to a user-writable dir on PATH (no root needed here; the CNI
+#         # bundle install to /opt/cni/bin happens under sudo inside the script).
+#         run: |
+#           mkdir -p "$HOME/.local/bin"
+#           curl -sSL "https://github.com/siderolabs/talos/releases/download/${TALOS_VERSION}/talosctl-linux-amd64" \
+#             -o "$HOME/.local/bin/talosctl"
+#           chmod +x "$HOME/.local/bin/talosctl"
+#           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+#           "$HOME/.local/bin/talosctl" version --client
+#
+#       - name: QEMU e2e rollout
+#         run: make test-qemu
