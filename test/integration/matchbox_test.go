@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os/exec"
 	"strings"
@@ -17,12 +18,25 @@ import (
 )
 
 // TestMatchboxServesStagedHost validates the driver↔Matchbox contract
-// (design/provisioning-plane.md §3): our file-backed driver writes group /
-// profile / generic files that a REAL Matchbox serves correctly — the
-// generic_id field name and the talos.config arg in particular (the layout
-// details unit tests can't prove). No VM/boot; just Matchbox in docker.
+// (design/provisioning-plane.md §3): our file-backed driver mirrors the boot
+// assets and writes group / profile / generic files that a REAL Matchbox serves
+// correctly — the generic_id field name, the talos.config arg, and the mirrored
+// /assets URLs (layout details unit tests can't prove). No VM/boot; just Matchbox
+// in docker.
+//
+// The boot assets come from a LOCAL httptest upstream, not the live Image
+// Factory, so the test is hermetic and fast: Stage mirrors those bytes into the
+// staging dir and Matchbox serves them back from /assets over plain HTTP.
 func TestMatchboxServesStagedHost(t *testing.T) {
 	requireBin(t, "docker")
+
+	// Stand-in for the Talos Image Factory: any path returns a marker body, so
+	// the mirror step has a real 200 upstream without touching the network.
+	const kernelBody = "FAKE-KERNEL-BYTES"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, kernelBody+" "+r.URL.Path)
+	}))
+	t.Cleanup(upstream.Close)
 
 	const port = "38086"
 	httpURL := "http://127.0.0.1:" + port
@@ -34,9 +48,10 @@ func TestMatchboxServesStagedHost(t *testing.T) {
 	}
 	mac := "aa:bb:cc:dd:ee:ff"
 	cfg := []byte("version: v1alpha1\nmachine:\n  type: worker\n  # MEDEA-TEST-MARKER\n")
+	const kernelPath = "/image/test/v1.13.5/kernel-amd64"
 	if err := st.Stage(context.Background(), mac, provision.Profile{
-		Kernel: "https://factory.talos.dev/image/abc/v1.13.5/kernel-amd64",
-		Initrd: []string{"https://factory.talos.dev/image/abc/v1.13.5/initramfs-amd64.xz"},
+		Kernel: upstream.URL + kernelPath,
+		Initrd: []string{upstream.URL + "/image/test/v1.13.5/initramfs-amd64.xz"},
 		Args:   []string{"talos.platform=metal"},
 	}, cfg); err != nil {
 		t.Fatalf("stage: %v", err)
@@ -44,25 +59,32 @@ func TestMatchboxServesStagedHost(t *testing.T) {
 
 	name := "medea-matchbox-it"
 	_ = exec.Command("docker", "rm", "-f", name).Run()
-	// -assets-path= disables Matchbox local asset serving (it fatals otherwise on
-	// a missing default assets dir). Medea's profiles boot kernel/initrd straight
-	// from the Image Factory, so Matchbox serves only groups/profiles/generic.
+	// Serve the mirrored boot assets from the default assets path
+	// (/var/lib/matchbox/assets, created by Stage) — Medea's profiles now point
+	// kernel/initrd at Matchbox's own /assets over plain HTTP (iPXE has no TLS),
+	// so asset serving must be ENABLED (was disabled before the mirror feature).
 	run(t, 3*time.Minute, "docker", "run", "-d", "--name", name, "--platform", "linux/amd64",
 		"-p", port+":8080", "-v", dir+":/var/lib/matchbox:ro",
-		"quay.io/poseidon/matchbox:v0.11.0", "-address=0.0.0.0:8080", "-assets-path=", "-log-level=debug")
+		"quay.io/poseidon/matchbox:v0.11.0", "-address=0.0.0.0:8080", "-log-level=debug")
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
 
 	waitHTTP(t, httpURL+"/", 60*time.Second)
 
 	q := "?mac=" + url.QueryEscape(mac)
 
-	// /ipxe renders the boot script: our kernel + the talos.config pointing back
-	// at /generic (this is what fetches the machine config on boot).
+	// /ipxe renders the boot script: the kernel points at Matchbox's mirrored
+	// /assets URL (not the upstream), plus talos.config pointing back at /generic.
 	ipxe := httpGet(t, httpURL+"/ipxe"+q)
-	for _, want := range []string{"kernel-amd64", "talos.config=" + httpURL + "/generic"} {
+	mirroredKernel := httpURL + "/assets" + kernelPath
+	for _, want := range []string{mirroredKernel, "talos.config=" + httpURL + "/generic"} {
 		if !strings.Contains(ipxe, want) {
 			t.Fatalf("/ipxe missing %q:\n%s", want, ipxe)
 		}
+	}
+
+	// Matchbox actually serves the mirrored kernel bytes at that /assets URL.
+	if got := httpGet(t, mirroredKernel); !strings.Contains(got, kernelBody) {
+		t.Fatalf("/assets did not serve the mirrored kernel: %q", got)
 	}
 
 	// /generic serves the exact machine config we staged for this MAC.

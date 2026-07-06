@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -25,7 +26,10 @@ import (
 func TestDrainEvictsWorkload(t *testing.T) {
 	c := Start(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Budget for the whole flow: schedule + image-pull + Running, then drain, then
+	// eviction. 15m (was 5m) so the per-step waits below actually get their time
+	// on a slow CI runner — a 5m ceiling here silently capped them.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	restCfg, err := clientcmd.RESTConfigFromKubeConfig(c.Kubeconfig)
@@ -35,6 +39,15 @@ func TestDrainEvictsWorkload(t *testing.T) {
 	cs, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// Talos enforces Pod Security Admission (baseline) on namespaces, which forbids
+	// hostNetwork. Relax the default namespace to privileged so the hostNetwork
+	// probe below is admitted — this is a throwaway cluster.
+	if _, err := cs.CoreV1().Namespaces().Patch(ctx, "default", types.StrategicMergePatchType,
+		[]byte(`{"metadata":{"labels":{"pod-security.kubernetes.io/enforce":"privileged"}}}`),
+		metav1.PatchOptions{}); err != nil {
+		t.Fatalf("relax PSA on default namespace: %v", err)
 	}
 
 	kc, err := kube.New(c.Kubeconfig)
@@ -66,6 +79,13 @@ func TestDrainEvictsWorkload(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "drain-test"}},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: ptr(int64(0)),
+					// hostNetwork so the pod needs no CNI/pod-IP to reach Running: the
+					// docker Talos cluster's flannel overlay doesn't initialize in the
+					// nested-docker CI environment (CIDRAssignmentFailed -> no
+					// subnet.env -> sandbox setup fails). This test exercises kube.Drain
+					// (cordon + evict), not pod networking, so the host netns is fine
+					// and keeps the probe schedulable everywhere.
+					HostNetwork: true,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot:   ptr(true),
 						RunAsUser:      ptr(int64(65535)),
@@ -87,9 +107,11 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		t.Fatalf("create deployment: %v", err)
 	}
 
-	// Wait for the pod to be Running on the worker; capture its name.
+	// Wait for the pod to be Running on the worker; capture its name. 8m: on a
+	// cold, CPU-starved CI runner the worker still has to pull the pause image and
+	// wire the sandbox right after the cluster came up.
 	var podName string
-	if !waitFor(ctx, 3*time.Minute, func() bool {
+	if !waitFor(ctx, 8*time.Minute, func() bool {
 		pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"})
 		if err != nil {
 			return false
@@ -103,6 +125,7 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		}
 		return false
 	}) {
+		dumpWorkloadDiag(t, cs, worker)
 		t.Fatal("workload pod never reached Running on the worker")
 	}
 
@@ -118,6 +141,40 @@ func TestDrainEvictsWorkload(t *testing.T) {
 		return apierrors.IsNotFound(err)
 	}) {
 		t.Fatalf("pod %s was not evicted", podName)
+	}
+}
+
+// dumpWorkloadDiag logs why the drain-test pod hasn't started — its phase, node,
+// conditions, and container waiting reasons, plus recent namespace events — so a
+// CI failure ("never reached Running") is diagnosable instead of opaque.
+func dumpWorkloadDiag(t *testing.T, cs *kubernetes.Clientset, worker string) {
+	t.Helper()
+	// Fresh context: the caller's ctx is typically already expired (that's why we
+	// timed out), which is exactly when this diagnostic must still work.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	t.Logf("diag: worker node = %s", worker)
+	if pods, err := cs.CoreV1().Pods("default").List(ctx, metav1.ListOptions{LabelSelector: "app=drain-test"}); err != nil {
+		t.Logf("diag: list pods: %v", err)
+	} else {
+		for i := range pods.Items {
+			p := &pods.Items[i]
+			t.Logf("diag: pod %s node=%q phase=%s", p.Name, p.Spec.NodeName, p.Status.Phase)
+			for _, c := range p.Status.Conditions {
+				t.Logf("  cond %s=%s %s %s", c.Type, c.Status, c.Reason, c.Message)
+			}
+			for _, cst := range p.Status.ContainerStatuses {
+				if w := cst.State.Waiting; w != nil {
+					t.Logf("  container %s waiting: %s %s", cst.Name, w.Reason, w.Message)
+				}
+			}
+		}
+	}
+	if ev, err := cs.CoreV1().Events("default").List(ctx, metav1.ListOptions{}); err == nil {
+		for i := range ev.Items {
+			e := &ev.Items[i]
+			t.Logf("diag: event %s/%s: %s", e.Type, e.Reason, e.Message)
+		}
 	}
 }
 
