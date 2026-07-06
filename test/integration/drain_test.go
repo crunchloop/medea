@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -38,6 +39,15 @@ func TestDrainEvictsWorkload(t *testing.T) {
 	cs, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// Talos enforces Pod Security Admission (baseline) on namespaces, which forbids
+	// hostNetwork. Relax the default namespace to privileged so the hostNetwork
+	// probe below is admitted — this is a throwaway cluster.
+	if _, err := cs.CoreV1().Namespaces().Patch(ctx, "default", types.StrategicMergePatchType,
+		[]byte(`{"metadata":{"labels":{"pod-security.kubernetes.io/enforce":"privileged"}}}`),
+		metav1.PatchOptions{}); err != nil {
+		t.Fatalf("relax PSA on default namespace: %v", err)
 	}
 
 	kc, err := kube.New(c.Kubeconfig)
@@ -69,6 +79,13 @@ func TestDrainEvictsWorkload(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "drain-test"}},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: ptr(int64(0)),
+					// hostNetwork so the pod needs no CNI/pod-IP to reach Running: the
+					// docker Talos cluster's flannel overlay doesn't initialize in the
+					// nested-docker CI environment (CIDRAssignmentFailed -> no
+					// subnet.env -> sandbox setup fails). This test exercises kube.Drain
+					// (cordon + evict), not pod networking, so the host netns is fine
+					// and keeps the probe schedulable everywhere.
+					HostNetwork: true,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot:   ptr(true),
 						RunAsUser:      ptr(int64(65535)),
