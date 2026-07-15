@@ -19,6 +19,7 @@ reasoning stays useful after the work ships.
 | --- | --- |
 | [`datastore.md`](datastore.md) | The embedded (bbolt) store: desired-vs-observed schema, proto-as-storage, revisions, watch, concurrency, crash recovery, desired-state export. |
 | [`api-and-auth.md`](api-and-auth.md) | The gRPC service (intent verbs, thin watch), v1 auth (bearer token over TLS), and credential storage (separate from bbolt). Resolves #8/#9. |
+| [`mcp.md`](mcp.md) | The Iris-facing read-only MCP adapter over the existing application API, Streamable HTTP boundary, curated tools, and the future SEP-2663 Tasks mapping for durable rollouts. |
 | [`credentials.md`](credentials.md) | **(Phase A, Draft for review)** Making Medea the durable, off-host owner of a cluster's credentials + machine-secrets bundle so `home-cluster`'s `_out/` can be deleted: a 1Password-backed `CredentialStore` (built, was planned in api-and-auth §5), a guarded `GetCredentials` RPC, and the cutover. Prerequisite for Phase B (`cluster-bootstrap.md`). |
 | [`talos-client.md`](talos-client.md) | Talos & kube clients (no shelling): small Medea interfaces over the `machinery` client (OS upgrade/snapshot/health/version) + client-go (readiness/drain); the quarantined main-module `upgrade-k8s`; installer-image/schematic derivation. |
 | [`rollout-controller.md`](rollout-controller.md) | The v1 version-rollout reconciler: per-node state machine, OS vs K8s paths, halt-on-failure, resume-after-reboot, control-plane snapshot safety. (Trigger in §1 superseded by `rollout-safety.md`.) |

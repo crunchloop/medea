@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	pb "github.com/crunchloop/medea/gen/medea/v1"
 	"github.com/crunchloop/medea/internal/auth"
 	"github.com/crunchloop/medea/internal/creds"
+	"github.com/crunchloop/medea/internal/delivery/mcpapi"
 	"github.com/crunchloop/medea/internal/provision"
 	"github.com/crunchloop/medea/internal/provision/matchbox"
 	"github.com/crunchloop/medea/internal/refresh"
@@ -87,6 +89,7 @@ var (
 
 	serveBootstrap     bool
 	serveBootstrapIntv time.Duration
+	serveMCPListen     string
 )
 
 func init() {
@@ -120,6 +123,7 @@ func init() {
 	f.DurationVar(&serveProvisionTO, "provision-timeout", 20*time.Minute, "how long a host may stay provisioning before it is marked failed")
 	f.BoolVar(&serveBootstrap, "bootstrap", false, "enable the cluster-bootstrap executor (Medea-driven new-cluster creation; default off)")
 	f.DurationVar(&serveBootstrapIntv, "bootstrap-interval", 30*time.Second, "how often the bootstrap executor advances in-flight cluster creations")
+	f.StringVar(&serveMCPListen, "mcp-listen", "", "serve read-only MCP over Streamable HTTP at /mcp (disabled when empty)")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -166,7 +170,8 @@ func runServe(_ *cobra.Command, _ []string) error {
 		grpc.UnaryInterceptor(auth.UnaryInterceptor(token)),
 		grpc.StreamInterceptor(auth.StreamInterceptor(token)),
 	)
-	pb.RegisterMedeaServer(srv, server.New(st, server.WithCreds(cs)))
+	api := server.New(st, server.WithCreds(cs))
+	pb.RegisterMedeaServer(srv, api)
 
 	lis, err := net.Listen("tcp", serveListen)
 	if err != nil {
@@ -224,15 +229,44 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintln(os.Stderr, "medea: bootstrap executor disabled (pass --bootstrap to enable)")
 	}
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() { errCh <- srv.Serve(lis) }()
 	fmt.Fprintf(os.Stderr, "medea: serving on %s (store=%s, tls cert=%s)\n", serveListen, serveStore, serveCert)
+
+	var mcpHTTP *http.Server
+	if serveMCPListen != "" {
+		mcpServer, err := mcpapi.NewServer(api)
+		if err != nil {
+			return fmt.Errorf("MCP server: %w", err)
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/mcp", mcpServer.Handler())
+		mcpHTTP = &http.Server{
+			Addr:              serveMCPListen,
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		go func() {
+			err := mcpHTTP.ListenAndServe()
+			if !errors.Is(err, http.ErrServerClosed) {
+				errCh <- err
+			}
+		}()
+		fmt.Fprintf(os.Stderr, "medea: read-only MCP serving on http://%s/mcp\n", serveMCPListen)
+	}
 
 	select {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
 		fmt.Fprintln(os.Stderr, "medea: shutting down")
+		if mcpHTTP != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := mcpHTTP.Shutdown(shutdownCtx); err != nil {
+				return fmt.Errorf("shut down MCP server: %w", err)
+			}
+		}
 		srv.GracefulStop()
 		return nil
 	}

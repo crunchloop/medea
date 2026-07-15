@@ -47,6 +47,7 @@ somewhere that is **not** the managed cluster (PRD §13 #10).
 ```sh
 medea serve \
   --listen 0.0.0.0:7600 \
+  --mcp-listen 127.0.0.1:7601 \
   --store /var/lib/medea/medea.db \
   --creds-dir /var/lib/medea/creds \
   --token-file /etc/medea/token \
@@ -64,8 +65,37 @@ Notes:
   the server read-only.
 - **Credentials** (talosconfig/kubeconfig) live under `--creds-dir`, **not** in
   the bbolt store, and are never exported. See [Credentials](#credentials).
+- **MCP** is disabled unless `--mcp-listen` is set. It serves a curated,
+  read-only Streamable HTTP endpoint at `/mcp`; bind it only to loopback or a
+  trusted private network. It does not expose credential retrieval or mutation
+  tools. See [`design/mcp.md`](design/mcp.md).
 
 For a systemd unit and a container image, see [`deploy/`](deploy/).
+
+## Iris MCP integration
+
+Start Medea with an MCP listener reachable from Iris, then add the server to
+Iris policy:
+
+```yaml
+mcpServers:
+  medea:
+    url: http://medea.example.internal:7601/mcp
+    users: [martin]
+    tools:
+      - list_clusters
+      - get_cluster
+      - list_node_pools
+      - list_machines
+      - list_hosts
+      - get_rollout
+      - list_rollouts
+    approval: never
+```
+
+The endpoint currently has no application-layer authentication. Keep it on a
+private interface or place it behind an authenticated TLS reverse proxy. Its
+catalog is read-only, but it still reveals cluster inventory and topology.
 
 ## Credentials
 
